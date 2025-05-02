@@ -52,7 +52,7 @@ class _LaunchPageState extends State<LaunchPage> with TickerProviderStateMixin {
 
     Timer(const Duration(seconds: 5), () {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) =>  AreaPage()),
+        MaterialPageRoute(builder: (_) => const AreaPage()),
       );
     });
   }
@@ -103,14 +103,6 @@ class _LaunchPageState extends State<LaunchPage> with TickerProviderStateMixin {
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(100),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.green.withOpacity(0.3),
-                        blurRadius: 24,
-                        spreadRadius: 4,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
                   ),
                   child: Image.asset(
                     'assets/images/cash.png',
