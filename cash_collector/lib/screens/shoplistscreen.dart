@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'balance_screen.dart';
 
 class ShopListScreen extends StatefulWidget {
   final String routeName;
@@ -14,9 +15,9 @@ class _ShopListScreenState extends State<ShopListScreen> {
 
   final List<Map<String, String>> allShops = [
     {"name": "ABC Store", "address": "123 Main St", "phone": "0755354023", "status": "Unpaid"},
-    {"name": "XYZ Store", "address": "123 Main St", "phone": "0755354023", "status": "Unpaid"},
-    {"name": "RH Stores", "address": "123 Main St", "phone": "0755354023", "status": "Paid"},
-    {"name": "RR Stores", "address": "123 Main St", "phone": "0755354023", "status": "Paid"},
+    {"name": "XYZ Store", "address": "456 Elm St", "phone": "0755354024", "status": "Unpaid"},
+    {"name": "RH Stores", "address": "789 Oak St", "phone": "0755354025", "status": "Paid"},
+    {"name": "RR Stores", "address": "101 Maple St", "phone": "0755354026", "status": "Paid"},
   ];
 
   @override
@@ -29,8 +30,8 @@ class _ShopListScreenState extends State<ShopListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Shops"),
-        leading: BackButton(),
+        title: const Text("Shops"),
+        leading: const BackButton(),
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
@@ -47,7 +48,10 @@ class _ShopListScreenState extends State<ShopListScreen> {
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
                 fillColor: Colors.grey.shade200,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -87,7 +91,18 @@ class _ShopListScreenState extends State<ShopListScreen> {
                     margin: const EdgeInsets.symmetric(vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     child: ListTile(
-                      title: Text(shop['name']!, style: const TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold)),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => BalanceScreen(shopName: shop['name']!),
+                          ),
+                        );
+                      },
+                      title: Text(
+                        shop['name']!,
+                        style: const TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold),
+                      ),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
