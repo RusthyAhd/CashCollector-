@@ -1,32 +1,103 @@
 import 'package:flutter/material.dart';
 
-class BalanceScreen extends StatelessWidget {
+class BalanceScreen extends StatefulWidget {
   final String shopName;
   const BalanceScreen({super.key, required this.shopName});
 
   @override
-  Widget build(BuildContext context) {
-    final List<Map<String, String>> transactions = [
-      {
-        'store': 'ABC Store',
-        'time': '10:15AM',
-        'amount': '\$300',
-        'type': 'Cash'
-      },
-      {
-        'store': 'XYZ Mart',
-        'time': '9:30AM',
-        'amount': '\$150',
-        'type': 'Online'
-      },
-      {
-        'store': 'Doe Supplies',
-        'time': 'Yesterday',
-        'amount': '\$130',
-        'type': 'Cash'
-      },
-    ];
+  State<BalanceScreen> createState() => _BalanceScreenState();
+}
 
+class _BalanceScreenState extends State<BalanceScreen> {
+  double balanceAmount = 4933.24;
+
+  final List<Map<String, String>> transactions = [
+    {
+      'store': 'ABC Store',
+      'time': '10:15AM',
+      'amount': '\$300',
+      'type': 'Cash'
+    },
+    {
+      'store': 'XYZ Mart',
+      'time': '9:30AM',
+      'amount': '\$150',
+      'type': 'Online'
+    },
+    {
+      'store': 'Doe Supplies',
+      'time': 'Yesterday',
+      'amount': '\$130',
+      'type': 'Cash'
+    },
+  ];
+
+  void _showAdjustDialog() {
+    final TextEditingController controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Adjust Balance"),
+          content: TextField(
+            controller: controller,
+            keyboardType: TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              hintText: "Enter amount to reduce",
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final input = controller.text;
+                final double? reduction = double.tryParse(input);
+                if (reduction != null &&
+                    reduction > 0 &&
+                    reduction <= balanceAmount) {
+                  setState(() {
+                    balanceAmount -= reduction;
+                  });
+                  Navigator.pop(context); // Close input dialog
+
+                  // Show success dialog
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      content: Text(
+                          "Successfully reduced LKR ${reduction.toStringAsFixed(2)} from balance."),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            FocusScope.of(context)
+                                .unfocus(); // Hide keyboard if open
+                            Navigator.pop(context); // Close success dialog
+                          },
+                          child: const Text("OK"),
+                        ),
+                      ],
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Invalid amount entered")),
+                  );
+                }
+              },
+              child: const Text("Enter"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -34,7 +105,7 @@ class BalanceScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AppBar(
-              title: Text(shopName),
+              title: Text(widget.shopName),
               leading: const BackButton(),
               elevation: 0,
               backgroundColor: Colors.white,
@@ -54,9 +125,9 @@ class BalanceScreen extends StatelessWidget {
                     style: TextStyle(color: Colors.white70, fontSize: 16),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    '4933.24 LKR',
-                    style: TextStyle(
+                  Text(
+                    '${balanceAmount.toStringAsFixed(2)} LKR',
+                    style: const TextStyle(
                         color: Colors.redAccent,
                         fontSize: 32,
                         fontWeight: FontWeight.bold),
@@ -69,11 +140,7 @@ class BalanceScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 15),
                   ElevatedButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Adjust button clicked')),
-                      );
-                    },
+                    onPressed: _showAdjustDialog,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
                       foregroundColor: Colors.white,
