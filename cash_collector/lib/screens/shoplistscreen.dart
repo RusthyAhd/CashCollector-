@@ -52,7 +52,9 @@ class _ShopListScreenState extends State<ShopListScreen> {
       final matchSearch = shop['name']
           .toLowerCase()
           .contains(_searchController.text.toLowerCase());
-      return matchStatus && matchSearch;
+      final hasValidAmount =
+          showUnpaid || shop['amount'] != null; // Exclude null amounts for Paid
+      return matchStatus && matchSearch && hasValidAmount;
     }).toList();
 
     // Calculate total paid amount if showUnpaid is false
@@ -142,8 +144,8 @@ class _ShopListScreenState extends State<ShopListScreen> {
                                   final shopToUpdate = allShops
                                       .firstWhere((s) => s['name'] == shopName);
                                   shopToUpdate['status'] = 'Paid';
-                                  shopToUpdate['amount'] =
-                                      reducedAmount.toInt(); // Set the reduced amount
+                                  shopToUpdate['amount'] = reducedAmount
+                                      .toInt(); // Set the reduced amount
                                 });
                               },
                             ),
@@ -162,7 +164,8 @@ class _ShopListScreenState extends State<ShopListScreen> {
                               style: const TextStyle(color: Colors.white)),
                           Text(shop['phone'],
                               style: const TextStyle(color: Colors.white)),
-                          if (shop['status'] == 'Paid' && shop['amount'] != null)
+                          if (shop['status'] == 'Paid' &&
+                              shop['amount'] != null)
                             Text("Amount: Rs.${shop['amount']}",
                                 style: const TextStyle(
                                     color: Colors.lightGreenAccent)),
