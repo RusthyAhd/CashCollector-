@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'dart:async';
 import 'balance_screen.dart';
 
 class ShopListScreen extends StatefulWidget {
@@ -13,7 +16,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool showUnpaid = true;
 
-  final List<Map<String, dynamic>> allShops = [
+  List<Map<String, dynamic>> allShops = [
     {
       "name": "ABC Store",
       "address": "123 Main St",
@@ -33,16 +36,79 @@ class _ShopListScreenState extends State<ShopListScreen> {
       "address": "789 Oak St",
       "phone": "0755354025",
       "status": "Paid",
-      "amount": null // Set to null initially
+      "amount": 300
     },
     {
       "name": "RR Stores",
       "address": "101 Maple St",
       "phone": "0755354026",
       "status": "Paid",
-      "amount": null // Set to null initially
+      "amount": 250
     },
   ];
+
+  Map<String, int> countdowns = {};
+  Map<String, Timer> timers = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadShops();
+  }
+
+  @override
+  void dispose() {
+    for (var timer in timers.values) {
+      timer.cancel();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadShops() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? savedShops = prefs.getString('shops');
+    if (savedShops != null) {
+      setState(() {
+        allShops = List<Map<String, dynamic>>.from(json.decode(savedShops));
+      });
+    }
+
+    for (var shop in allShops) {
+      if (shop['status'] == 'Paid' && shop['amount'] != null) {
+        _startCountdown(shop['name']);
+      }
+    }
+  }
+
+  Future<void> _saveShops() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('shops', json.encode(allShops));
+  }
+
+  void _startCountdown(String shopName) {
+    if (countdowns.containsKey(shopName)) return;
+
+    countdowns[shopName] = 43200; // Set countdown to 12 hours (43200 seconds)
+
+    timers[shopName]?.cancel();
+    timers[shopName] = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+
+      setState(() {
+        if (countdowns[shopName]! > 0) {
+          countdowns[shopName] = countdowns[shopName]! - 1;
+        } else {
+          timer.cancel();
+          final shop = allShops.firstWhere((s) => s['name'] == shopName);
+          shop['status'] = 'Unpaid';
+          shop['amount'] = 0;
+          countdowns.remove(shopName);
+          timers.remove(shopName);
+          _saveShops();
+        }
+      });
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,12 +118,10 @@ class _ShopListScreenState extends State<ShopListScreen> {
       final matchSearch = shop['name']
           .toLowerCase()
           .contains(_searchController.text.toLowerCase());
-      final hasValidAmount =
-          showUnpaid || shop['amount'] != null; // Exclude null amounts for Paid
+      final hasValidAmount = showUnpaid || shop['amount'] != null;
       return matchStatus && matchSearch && hasValidAmount;
     }).toList();
 
-    // Calculate total paid amount if showUnpaid is false
     int totalPaidAmount = 0;
     if (!showUnpaid) {
       totalPaidAmount = filteredShops.fold(
@@ -126,6 +190,9 @@ class _ShopListScreenState extends State<ShopListScreen> {
                 itemCount: filteredShops.length,
                 itemBuilder: (context, index) {
                   final shop = filteredShops[index];
+                  final name = shop['name'];
+                  final countdown = countdowns[name] ?? 0;
+
                   return Card(
                     color: Colors.blueGrey.shade900,
                     margin: const EdgeInsets.symmetric(vertical: 8),
@@ -137,23 +204,25 @@ class _ShopListScreenState extends State<ShopListScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (context) => BalanceScreen(
-                              shopName: shop['name'],
-                              onBalanceAdjusted: (shopName, reducedAmount) {
+                              shopName: name,
+                              onBalanceAdjusted:
+                                  (shopName, reducedAmount) async {
                                 setState(() {
-                                  // Find the shop and update its status and amount
                                   final shopToUpdate = allShops
                                       .firstWhere((s) => s['name'] == shopName);
                                   shopToUpdate['status'] = 'Paid';
-                                  shopToUpdate['amount'] = reducedAmount
-                                      .toInt(); // Set the reduced amount
+                                  shopToUpdate['amount'] =
+                                      reducedAmount.toInt();
                                 });
+                                _startCountdown(shopName);
+                                await _saveShops();
                               },
                             ),
                           ),
                         );
                       },
                       title: Text(
-                        shop['name'],
+                        name,
                         style: const TextStyle(
                             color: Colors.yellow, fontWeight: FontWeight.bold),
                       ),
@@ -171,8 +240,23 @@ class _ShopListScreenState extends State<ShopListScreen> {
                                     color: Colors.lightGreenAccent)),
                         ],
                       ),
-                      trailing: const Icon(Icons.location_pin,
-                          color: Colors.pinkAccent),
+                      trailing: shop['status'] == 'Paid' &&
+                              countdowns.containsKey(name)
+                          ? AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 500),
+                              transitionBuilder: (child, animation) =>
+                                  ScaleTransition(
+                                      scale: animation, child: child),
+                              child: Text(
+                                "Reverting in $countdown s",
+                                key: ValueKey<int>(countdown),
+                                style: const TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            )
+                          : const Icon(Icons.location_pin,
+                              color: Colors.pinkAccent),
                     ),
                   );
                 },
