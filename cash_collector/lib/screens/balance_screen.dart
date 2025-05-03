@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 
 class BalanceScreen extends StatefulWidget {
   final String shopName;
-  const BalanceScreen({super.key, required this.shopName});
+  final Function(String shopName, double newBalance)
+      onBalanceAdjusted; // Add callback
+
+  const BalanceScreen({
+    super.key,
+    required this.shopName,
+    required this.onBalanceAdjusted, // Add callback
+  });
 
   @override
   State<BalanceScreen> createState() => _BalanceScreenState();
@@ -56,12 +63,14 @@ class _BalanceScreenState extends State<BalanceScreen> {
               onPressed: () {
                 final input = controller.text;
                 final double? reduction = double.tryParse(input);
-                if (reduction != null &&
-                    reduction > 0 &&
-                    reduction <= balanceAmount) {
+                if (reduction != null && reduction > 0 && reduction <= balanceAmount) {
                   setState(() {
-                    balanceAmount -= reduction;
+                    balanceAmount -= reduction; // Update the remaining balance locally
                   });
+
+                  // Pass the reduced amount to the callback
+                  widget.onBalanceAdjusted(widget.shopName, reduction);
+
                   Navigator.pop(context); // Close input dialog
 
                   // Show success dialog
@@ -73,8 +82,7 @@ class _BalanceScreenState extends State<BalanceScreen> {
                       actions: [
                         TextButton(
                           onPressed: () {
-                            FocusScope.of(context)
-                                .unfocus(); // Hide keyboard if open
+                            FocusScope.of(context).unfocus(); // Hide keyboard if open
                             Navigator.pop(context); // Close success dialog
                           },
                           child: const Text("OK"),
