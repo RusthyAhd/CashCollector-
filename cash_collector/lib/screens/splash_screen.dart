@@ -47,7 +47,7 @@ class _LaunchPageState extends State<LaunchPage> with TickerProviderStateMixin {
 
     Timer(const Duration(seconds: 5), () {
       Navigator.of(context)
-          .pushReplacement(MaterialPageRoute(builder: (_) => const AreaPage()));
+          .pushReplacement(MaterialPageRoute(builder: (_) => const RoutePage()));
     });
   }
 

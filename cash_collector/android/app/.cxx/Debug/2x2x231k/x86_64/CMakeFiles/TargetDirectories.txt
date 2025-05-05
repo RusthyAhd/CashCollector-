@@ -1,0 +1,2 @@
+C:/Users/DELL Latitude 7290/Desktop/pegas/CashCollector-/cash_collector/android/app/.cxx/Debug/2x2x231k/x86_64/CMakeFiles/edit_cache.dir
+C:/Users/DELL Latitude 7290/Desktop/pegas/CashCollector-/cash_collector/android/app/.cxx/Debug/2x2x231k/x86_64/CMakeFiles/rebuild_cache.dir

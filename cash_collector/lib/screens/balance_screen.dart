@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BalanceScreen extends StatefulWidget {
   final String shopName;
-  final Function(String shopName, double newBalance)
-      onBalanceAdjusted; // Add callback
+  final String routeName;
+  final String shopId;
+  final Function(String shopName, double reducedAmount) onBalanceAdjusted;
 
   const BalanceScreen({
     super.key,
     required this.shopName,
-    required this.onBalanceAdjusted, // Add callback
+    required this.routeName,
+    required this.shopId,
+    required this.onBalanceAdjusted,
   });
 
   @override
@@ -16,7 +20,7 @@ class BalanceScreen extends StatefulWidget {
 }
 
 class _BalanceScreenState extends State<BalanceScreen> {
-  double balanceAmount = 4933.24;
+  double? balanceAmount;
 
   final List<Map<String, String>> transactions = [
     {
@@ -39,6 +43,28 @@ class _BalanceScreenState extends State<BalanceScreen> {
     },
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _fetchBalance();
+  }
+
+  Future<void> _fetchBalance() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('routes')
+        .doc(widget.routeName)
+        .collection('shops')
+        .doc(widget.shopId)
+        .get();
+
+    if (doc.exists) {
+      final data = doc.data();
+      setState(() {
+        balanceAmount = (data?['amount'] ?? 0).toDouble();
+      });
+    }
+  }
+
   void _showAdjustDialog() {
     final TextEditingController controller = TextEditingController();
 
@@ -60,20 +86,32 @@ class _BalanceScreenState extends State<BalanceScreen> {
               child: const Text("Cancel"),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 final input = controller.text;
                 final double? reduction = double.tryParse(input);
-                if (reduction != null && reduction > 0 && reduction <= balanceAmount) {
-                  setState(() {
-                    balanceAmount -= reduction; // Update the remaining balance locally
+                if (reduction != null &&
+                    reduction > 0 &&
+                    reduction <= (balanceAmount ?? 0)) {
+                  final newBalance = (balanceAmount ?? 0) - reduction;
+
+                  // Update Firestore
+                  await FirebaseFirestore.instance
+                      .collection('routes')
+                      .doc(widget.routeName)
+                      .collection('shops')
+                      .doc(widget.shopId)
+                      .update({
+                    'amount': newBalance,
+                    'status': newBalance == 0 ? 'Unpaid' : 'Paid',
                   });
 
-                  // Pass the reduced amount to the callback
-                  widget.onBalanceAdjusted(widget.shopName, reduction);
+                  setState(() {
+                    balanceAmount = newBalance;
+                  });
 
+                  widget.onBalanceAdjusted(widget.shopName, reduction);
                   Navigator.pop(context); // Close input dialog
 
-                  // Show success dialog
                   showDialog(
                     context: context,
                     builder: (context) => AlertDialog(
@@ -82,8 +120,8 @@ class _BalanceScreenState extends State<BalanceScreen> {
                       actions: [
                         TextButton(
                           onPressed: () {
-                            FocusScope.of(context).unfocus(); // Hide keyboard if open
-                            Navigator.pop(context); // Close success dialog
+                            FocusScope.of(context).unfocus();
+                            Navigator.pop(context);
                           },
                           child: const Text("OK"),
                         ),
@@ -133,13 +171,15 @@ class _BalanceScreenState extends State<BalanceScreen> {
                     style: TextStyle(color: Colors.white70, fontSize: 16),
                   ),
                   const SizedBox(height: 10),
-                  Text(
-                    '${balanceAmount.toStringAsFixed(2)} LKR',
-                    style: const TextStyle(
-                        color: Colors.redAccent,
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold),
-                  ),
+                  balanceAmount == null
+                      ? const CircularProgressIndicator()
+                      : Text(
+                          '${balanceAmount!.toStringAsFixed(2)} LKR',
+                          style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold),
+                        ),
                   const SizedBox(height: 10),
                   const Text(
                     'Please click adjust button to reduce collected amount',
