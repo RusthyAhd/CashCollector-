@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cash_collector/screens/shoplistscreen.dart';
 
-class AreaPage extends StatelessWidget {
-  const AreaPage({super.key});
+class RoutePage extends StatelessWidget {
+  const RoutePage({super.key});
 
   final List<Map<String, String>> routes = const [
     {"name": "Kinniya Route", "emoji": "🛣️"},

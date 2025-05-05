@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'balance_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ShopListScreen extends StatefulWidget {
   final String routeName;
@@ -65,18 +66,34 @@ class _ShopListScreenState extends State<ShopListScreen> {
   }
 
   Future<void> _loadShops() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? savedShops = prefs.getString('shops');
-    if (savedShops != null) {
-      setState(() {
-        allShops = List<Map<String, dynamic>>.from(json.decode(savedShops));
-      });
-    }
+    final snapshot = await FirebaseFirestore.instance
+        .collection('routes')
+        .doc(widget.routeName)
+        .collection('shops')
+        .get();
+
+    setState(() {
+      allShops = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          "id": doc.id, // save doc ID for updating later
+          "name": data['name'] ?? '',
+          "address": data['address'] ?? '',
+          "phone": data['phone'] ?? '',
+          "status": data['status'] ?? 'Unpaid',
+          "amount": data['amount'] ?? 0,
+        };
+      }).toList();
+    });
 
     for (var shop in allShops) {
-      if (shop['status'] == 'Paid' && shop['amount'] != null) {
+      if (shop['status'] == 'Paid') {
         _startCountdown(shop['name']);
       }
+    }
+    print("Fetched shops:");
+    for (var shop in allShops) {
+      debugPrint(shop.toString());
     }
   }
 
@@ -125,7 +142,8 @@ class _ShopListScreenState extends State<ShopListScreen> {
     int totalPaidAmount = 0;
     if (!showUnpaid) {
       totalPaidAmount = filteredShops.fold(
-          0, (sum, shop) => sum + ((shop['amount'] ?? 0) as int));
+          0, 
+          (sum, shop) => sum + ((shop['amount'] ?? 0) as num).toInt());
     }
 
     return Scaffold(
@@ -204,18 +222,45 @@ class _ShopListScreenState extends State<ShopListScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (context) => BalanceScreen(
-                              shopName: name,
+                              shopName: shop['name'],
+                              routeName: widget.routeName,
+                              shopId:
+                                  shop['id'], // must be doc ID from Firestore
                               onBalanceAdjusted:
                                   (shopName, reducedAmount) async {
-                                setState(() {
-                                  final shopToUpdate = allShops
-                                      .firstWhere((s) => s['name'] == shopName);
-                                  shopToUpdate['status'] = 'Paid';
-                                  shopToUpdate['amount'] =
-                                      reducedAmount.toInt();
-                                });
-                                _startCountdown(shopName);
-                                await _saveShops();
+                                final updatedShops =
+                                    List<Map<String, dynamic>>.from(allShops);
+
+                                final shopIndex = updatedShops.indexWhere(
+                                    (shop) => shop['name'] == shopName);
+                                if (shopIndex != -1) {
+                                  final shopId = updatedShops[shopIndex][
+                                      'id']; // Make sure you're storing Firestore doc IDs
+                                  final currentAmount =
+                                      updatedShops[shopIndex]['amount'];
+                                  final newAmount =
+                                      currentAmount - reducedAmount;
+
+                                  // Update Firestore
+                                  await FirebaseFirestore.instance
+                                      .collection('routes')
+                                      .doc(widget.routeName)
+                                      .collection('shops')
+                                      .doc(shopId)
+                                      .update({
+                                    'status': 'Paid',
+                                    'amount': newAmount,
+                                  });
+
+                                  setState(() {
+                                    updatedShops[shopIndex]['status'] = 'Paid';
+                                    updatedShops[shopIndex]['amount'] =
+                                        newAmount;
+                                    allShops = updatedShops;
+                                  });
+
+                                  _startCountdown(shopName);
+                                }
                               },
                             ),
                           ),
