@@ -18,6 +18,8 @@ class _ShopListScreenState extends State<ShopListScreen> {
   bool showUnpaid = true;
 
   List<Map<String, dynamic>> allShops = [];
+  double totalPaidAcrossRoutes = 0.0;
+
   bool isLoading = true;
 
   Map<String, int> countdowns = {};
@@ -28,7 +30,8 @@ class _ShopListScreenState extends State<ShopListScreen> {
   void initState() {
     super.initState();
     _loadShops();
-    _startUiUpdater(); // UI countdown refresher
+    _fetchTotalPaidAcrossAllRoutes(); // 👈 added here
+    _startUiUpdater();
   }
 
   void _startUiUpdater() {
@@ -201,6 +204,41 @@ class _ShopListScreenState extends State<ShopListScreen> {
     });
   }
 
+  Future<void> _fetchTotalPaidAcrossAllRoutes() async {
+    double total = 0;
+    final now = DateTime.now();
+
+    final routesSnapshot =
+        await FirebaseFirestore.instance.collection('routes').get();
+
+    for (var routeDoc in routesSnapshot.docs) {
+      final shopsSnapshot = await routeDoc.reference.collection('shops').get();
+
+      for (var shopDoc in shopsSnapshot.docs) {
+        final shopData = shopDoc.data();
+        final status = shopData['status'];
+        final totalPaid = shopData['totalPaid'];
+        final paidAtTimestamp = shopData['paidAt'] as Timestamp?;
+
+        if (status == 'Paid' && totalPaid != null && paidAtTimestamp != null) {
+          final paidAt = paidAtTimestamp.toDate();
+          final secondsAgo = now.difference(paidAt).inSeconds;
+
+          if (secondsAgo <= 120) {
+            // Only within last 2 minutes
+            total += (totalPaid as num).toDouble();
+          }
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        totalPaidAcrossRoutes = total;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     List<Map<String, dynamic>> filteredShops = allShops.where((shop) {
@@ -357,6 +395,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
                                     });
 
                                     _startCountdown(shopName);
+                                    _fetchTotalPaidAcrossAllRoutes(); // 👈 added here
                                   }
                                 },
                               ),
@@ -416,15 +455,30 @@ class _ShopListScreenState extends State<ShopListScreen> {
                   color: Colors.green.shade100,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Column(
                   children: [
-                    const Text("Total Paid Amount: ",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text("Rs.$totalPaidAmount",
-                        style: const TextStyle(
-                            fontSize: 16,
-                            color: Color.fromARGB(255, 156, 5, 5))),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text("Route Total Paid: ",
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text("Rs.$totalPaidAmount",
+                            style: const TextStyle(
+                                fontSize: 16, color: Colors.teal)),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text("All Routes Total Paid: ",
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text("Rs.${totalPaidAcrossRoutes.toInt()}",
+                            style: const TextStyle(
+                                fontSize: 16,
+                                color: Color.fromARGB(255, 156, 5, 5))),
+                      ],
+                    ),
                   ],
                 ),
               ),

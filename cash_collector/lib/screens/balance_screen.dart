@@ -28,6 +28,8 @@ class _BalanceScreenState extends State<BalanceScreen> {
   void initState() {
     super.initState();
     _fetchBalance();
+    print('Shop ID: ${widget.shopId}');
+    print('Route: ${widget.routeName}');
   }
 
   Future<void> _fetchBalance() async {
@@ -49,16 +51,21 @@ class _BalanceScreenState extends State<BalanceScreen> {
     // Fetch transactions
     final txSnapshot = await shopRef
         .collection('transactions')
-        .orderBy('time', descending: true) // optional ordering
+        .orderBy('timestamp', descending: true)
         .get();
+
+    print('Transaction docs fetched: ${txSnapshot.docs.length}');
+    for (var doc in txSnapshot.docs) {
+      print('Doc: ${doc.id} => ${doc.data()}');
+    }
 
     final txList = txSnapshot.docs.map((doc) {
       final tx = doc.data();
       return {
-        'store': tx['store'] ?? '',
-        'time': tx['time'],
+        'time': tx['timestamp'], // ✅ use correct key here
         'amount': tx['amount'],
         'type': tx['type'] ?? 'Cash',
+        'store': widget.shopName, // optional: reuse shop name
       };
     }).toList();
 
