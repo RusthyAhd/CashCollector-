@@ -22,26 +22,7 @@ class BalanceScreen extends StatefulWidget {
 class _BalanceScreenState extends State<BalanceScreen> {
   double? balanceAmount;
 
-  final List<Map<String, String>> transactions = [
-    {
-      'store': 'ABC Store',
-      'time': '10:15AM',
-      'amount': '\$300',
-      'type': 'Cash'
-    },
-    {
-      'store': 'XYZ Mart',
-      'time': '9:30AM',
-      'amount': '\$150',
-      'type': 'Online'
-    },
-    {
-      'store': 'Doe Supplies',
-      'time': 'Yesterday',
-      'amount': '\$130',
-      'type': 'Cash'
-    },
-  ];
+  List<Map<String, dynamic>> transactions = [];
 
   @override
   void initState() {
@@ -50,12 +31,13 @@ class _BalanceScreenState extends State<BalanceScreen> {
   }
 
   Future<void> _fetchBalance() async {
-    final doc = await FirebaseFirestore.instance
+    final shopRef = FirebaseFirestore.instance
         .collection('routes')
         .doc(widget.routeName)
         .collection('shops')
-        .doc(widget.shopId)
-        .get();
+        .doc(widget.shopId);
+
+    final doc = await shopRef.get();
 
     if (doc.exists) {
       final data = doc.data();
@@ -63,6 +45,26 @@ class _BalanceScreenState extends State<BalanceScreen> {
         balanceAmount = (data?['amount'] ?? 0).toDouble();
       });
     }
+
+    // Fetch transactions
+    final txSnapshot = await shopRef
+        .collection('transactions')
+        .orderBy('time', descending: true) // optional ordering
+        .get();
+
+    final txList = txSnapshot.docs.map((doc) {
+      final tx = doc.data();
+      return {
+        'store': tx['store'] ?? '',
+        'time': tx['time'],
+        'amount': tx['amount'],
+        'type': tx['type'] ?? 'Cash',
+      };
+    }).toList();
+
+    setState(() {
+      transactions = txList;
+    });
   }
 
   void _showAdjustDialog() {
@@ -103,6 +105,18 @@ class _BalanceScreenState extends State<BalanceScreen> {
                       .update({
                     'amount': newBalance,
                     'status': newBalance == 0 ? 'Unpaid' : 'Paid',
+                  });
+
+// ✅ Add transaction to `transactions` subcollection
+                  await FirebaseFirestore.instance
+                      .collection('routes')
+                      .doc(widget.routeName)
+                      .collection('shops')
+                      .doc(widget.shopId)
+                      .collection('transactions')
+                      .add({
+                    'amount': reduction,
+                    'timestamp': FieldValue.serverTimestamp(),
                   });
 
                   setState(() {
@@ -229,29 +243,21 @@ class _BalanceScreenState extends State<BalanceScreen> {
                                 style: const TextStyle(
                                     fontSize: 16, fontWeight: FontWeight.w500)),
                             const SizedBox(height: 4),
-                            Text(tx['time']!,
-                                style: const TextStyle(color: Colors.grey)),
+                            Text(
+                              tx['time'] != null
+                                  ? (tx['time'] as Timestamp)
+                                      .toDate()
+                                      .toString()
+                                      .substring(0, 16)
+                                  : 'Unknown',
+                              style: const TextStyle(color: Colors.grey),
+                            ),
                           ],
                         ),
-                        Row(
-                          children: [
-                            Text(tx['amount']!,
-                                style: const TextStyle(
-                                    fontSize: 16, fontWeight: FontWeight.w600)),
-                            const SizedBox(width: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: tx['type'] == 'Cash'
-                                    ? Colors.grey.shade300
-                                    : Colors.blue.shade100,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(tx['type']!,
-                                  style: const TextStyle(fontSize: 12)),
-                            )
-                          ],
+                        Text(
+                          'LKR ${tx['amount'].toString()}',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
