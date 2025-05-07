@@ -239,6 +239,14 @@ class _ShopListScreenState extends State<ShopListScreen> {
     }
   }
 
+String formatDuration(Duration duration) {
+  String twoDigits(int n) => n.toString().padLeft(2, '0');
+  final hours = twoDigits(duration.inHours);
+  final minutes = twoDigits(duration.inMinutes.remainder(60));
+  final seconds = twoDigits(duration.inSeconds.remainder(60));
+  return "$hours:$minutes:$seconds";
+}
+
   @override
   Widget build(BuildContext context) {
     List<Map<String, dynamic>> filteredShops = allShops.where((shop) {
@@ -444,10 +452,11 @@ class _ShopListScreenState extends State<ShopListScreen> {
                         trailing:
                             shop['status'] == 'Paid' && remainingSeconds > 0
                                 ? Text(
-                                    "Reverting in ${remainingSeconds}s",
+                                    "Reverting in ${formatDuration(Duration(seconds: remainingSeconds))}",
                                     style: const TextStyle(
-                                        color: Colors.red,
-                                        fontWeight: FontWeight.bold),
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   )
                                 : const Icon(Icons.location_pin,
                                     color: Colors.pinkAccent),
