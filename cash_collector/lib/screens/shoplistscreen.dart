@@ -19,7 +19,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
 
   List<Map<String, dynamic>> allShops = [];
   double totalPaidAcrossRoutes = 0.0;
-
+  double routeTotalPaid = 0.0;
   bool isLoading = true;
 
   Map<String, int> countdowns = {};
@@ -31,6 +31,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
     super.initState();
     _loadShops();
     _fetchTotalPaidAcrossAllRoutes(); // 👈 added here
+    _fetchRouteTotalPaidInLast12Hours(); // 👈 ADD THIS
     _startUiUpdater();
   }
 
@@ -127,6 +128,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
               .update({'status': 'Unpaid', 'paidAt': null});
 
           status = 'Unpaid';
+          await _fetchRouteTotalPaidInLast12Hours(); // 👈 ADD THIS TOO
         }
       }
 
@@ -239,13 +241,45 @@ class _ShopListScreenState extends State<ShopListScreen> {
     }
   }
 
-String formatDuration(Duration duration) {
-  String twoDigits(int n) => n.toString().padLeft(2, '0');
-  final hours = twoDigits(duration.inHours);
-  final minutes = twoDigits(duration.inMinutes.remainder(60));
-  final seconds = twoDigits(duration.inSeconds.remainder(60));
-  return "$hours:$minutes:$seconds";
-}
+  Future<void> _fetchRouteTotalPaidInLast12Hours() async {
+    double total = 0;
+    final now = DateTime.now();
+    final shopsSnapshot = await FirebaseFirestore.instance
+        .collection('routes')
+        .doc(widget.routeName)
+        .collection('shops')
+        .get();
+
+    for (var shopDoc in shopsSnapshot.docs) {
+      final shopData = shopDoc.data();
+      final status = shopData['status'];
+      final totalPaid = shopData['totalPaid'];
+      final paidAtTimestamp = shopData['paidAt'] as Timestamp?;
+
+      if (status == 'Paid' && totalPaid != null && paidAtTimestamp != null) {
+        final paidAt = paidAtTimestamp.toDate();
+        final secondsAgo = now.difference(paidAt).inSeconds;
+
+        if (secondsAgo <= 43200) {
+          total += (totalPaid as num).toDouble();
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        routeTotalPaid = total;
+      });
+    }
+  }
+
+  String formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final hours = twoDigits(duration.inHours);
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return "$hours:$minutes:$seconds";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -321,7 +355,7 @@ String formatDuration(Duration duration) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                              "Refresh the page to see the time remaining"),
+                              "🔴Refresh the page to see the time remaining🔴"),
                           duration: Duration(seconds: 3),
                         ),
                       );
@@ -478,9 +512,9 @@ String formatDuration(Duration duration) {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text("Route Total Paid: ",
+                        const Text("Route Total (12h): ",
                             style: TextStyle(fontWeight: FontWeight.bold)),
-                        Text("Rs.$totalPaidAmount",
+                        Text("Rs.${routeTotalPaid.toInt()}",
                             style: const TextStyle(
                                 fontSize: 16, color: Colors.teal)),
                       ],
