@@ -116,7 +116,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
       // Automatically revert if time has passed
       if (status == 'Paid' && paidAt != null) {
         final difference = now.difference(paidAt).inSeconds;
-        if (difference >= 120) {
+        if (difference >= 43200) {
           // Use 43200 for 12 hours
           // Update Firestore
           await FirebaseFirestore.instance
@@ -164,7 +164,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
     // Use paidAt to calculate remaining seconds
     final startTime = paidAt ?? DateTime.now();
     final elapsed = DateTime.now().difference(startTime).inSeconds;
-    final totalSeconds = 120; // For testing: 2 minutes
+    final totalSeconds = 43200; // For testing: 2 minutes
     final remaining = totalSeconds - elapsed;
 
     if (remaining <= 0) return; // Already expired
@@ -224,7 +224,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
           final paidAt = paidAtTimestamp.toDate();
           final secondsAgo = now.difference(paidAt).inSeconds;
 
-          if (secondsAgo <= 120) {
+          if (secondsAgo <= 43200) {
             // Only within last 2 minutes
             total += (totalPaid as num).toDouble();
           }
@@ -308,7 +308,16 @@ class _ShopListScreenState extends State<ShopListScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => setState(() => showUnpaid = false),
+                    onPressed: () {
+                      setState(() => showUnpaid = false);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                              "Refresh the page to see the time remaining"),
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: !showUnpaid
                           ? Colors.green.shade600
@@ -336,7 +345,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
 
                     if (shop['status'] == 'Paid' && paidAt != null) {
                       final diff = DateTime.now().difference(paidAt).inSeconds;
-                      remainingSeconds = 120 - diff; // or 43200 for 12 hours
+                      remainingSeconds = 43200 - diff; // or 43200 for 12 hours
                       if (remainingSeconds < 0) remainingSeconds = 0;
                     }
 

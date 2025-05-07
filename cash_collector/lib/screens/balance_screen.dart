@@ -21,6 +21,7 @@ class BalanceScreen extends StatefulWidget {
 
 class _BalanceScreenState extends State<BalanceScreen> {
   double? balanceAmount;
+  bool _isProcessing = false;
 
   List<Map<String, dynamic>> transactions = [];
 
@@ -74,94 +75,130 @@ class _BalanceScreenState extends State<BalanceScreen> {
     });
   }
 
-  void _showAdjustDialog() {
-    final TextEditingController controller = TextEditingController();
+void _showAdjustDialog() {
+  final TextEditingController controller = TextEditingController();
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Adjust Balance"),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              hintText: "Enter amount to reduce",
+  showDialog(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            title: const Text("Adjust Balance"),
+            content: TextField(
+              controller: controller,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                hintText: "Enter amount to reduce",
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final input = controller.text;
-                final double? reduction = double.tryParse(input);
-                if (reduction != null &&
-                    reduction > 0 &&
-                    reduction <= (balanceAmount ?? 0)) {
-                  final newBalance = (balanceAmount ?? 0) - reduction;
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel",
+                    style: TextStyle(color: Colors.black),),
+              ),
+              ElevatedButton(
+                onPressed: _isProcessing
+                    ? null
+                    : () async {
+                        final input = controller.text;
+                        final double? reduction = double.tryParse(input);
 
-                  // Update Firestore
-                  await FirebaseFirestore.instance
-                      .collection('routes')
-                      .doc(widget.routeName)
-                      .collection('shops')
-                      .doc(widget.shopId)
-                      .update({
-                    'amount': newBalance,
-                    'status': newBalance == 0 ? 'Unpaid' : 'Paid',
-                  });
+                        if (reduction != null &&
+                            reduction > 0 &&
+                            reduction <= (balanceAmount ?? 0)) {
+                          setStateDialog(() {
+                            _isProcessing = true;
+                          });
 
-// ✅ Add transaction to `transactions` subcollection
-                  await FirebaseFirestore.instance
-                      .collection('routes')
-                      .doc(widget.routeName)
-                      .collection('shops')
-                      .doc(widget.shopId)
-                      .collection('transactions')
-                      .add({
-                    'amount': reduction,
-                    'timestamp': FieldValue.serverTimestamp(),
-                  });
+                          final newBalance =
+                              (balanceAmount ?? 0) - reduction;
 
-                  setState(() {
-                    balanceAmount = newBalance;
-                  });
+                          try {
+                            final shopDoc = FirebaseFirestore.instance
+                                .collection('routes')
+                                .doc(widget.routeName)
+                                .collection('shops')
+                                .doc(widget.shopId);
 
-                  widget.onBalanceAdjusted(widget.shopName, reduction);
-                  Navigator.pop(context); // Close input dialog
+                            await shopDoc.update({
+                              'amount': newBalance,
+                              'status': newBalance == 0
+                                  ? 'Unpaid'
+                                  : 'Paid',
+                            });
 
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      content: Text(
-                          "Successfully reduced LKR ${reduction.toStringAsFixed(2)} from balance."),
-                      actions: [
-                        TextButton(
-                          onPressed: () {
-                            FocusScope.of(context).unfocus();
-                            Navigator.pop(context);
-                          },
-                          child: const Text("OK"),
+                            await shopDoc
+                                .collection('transactions')
+                                .add({
+                              'amount': reduction,
+                              'timestamp': FieldValue.serverTimestamp(),
+                            });
+
+                            setState(() {
+                              balanceAmount = newBalance;
+                            });
+
+                            widget.onBalanceAdjusted(
+                                widget.shopName, reduction);
+
+                            Navigator.pop(context); // Close dialog
+
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                content: Text(
+                                    "Successfully reduced LKR ${reduction.toStringAsFixed(2)} from balance."),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                    },
+                                    child: const Text("OK", style: TextStyle(color: Colors.black),),
+                                  ),
+                                ],
+                              ),
+                            );
+                          } catch (e) {
+                            setStateDialog(() {
+                              _isProcessing = false;
+                            });
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(
+                                      "Error reducing balance: $e")),
+                            );
+                          }
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content:
+                                    Text("Invalid amount entered")),
+                          );
+                        }
+                      },
+                child: _isProcessing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
                         ),
-                      ],
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Invalid amount entered")),
-                  );
-                }
-              },
-              child: const Text("Enter"),
-            ),
-          ],
-        );
-      },
-    );
-  }
+                      )
+                    : const Text("Enter", style: TextStyle(color: Colors.black),),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
