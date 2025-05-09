@@ -21,41 +21,26 @@ class BalanceScreen extends StatefulWidget {
 
 class _BalanceScreenState extends State<BalanceScreen> {
   double? balanceAmount;
+  bool _isProcessing = false;
 
-  final List<Map<String, String>> transactions = [
-    {
-      'store': 'ABC Store',
-      'time': '10:15AM',
-      'amount': '\$300',
-      'type': 'Cash'
-    },
-    {
-      'store': 'XYZ Mart',
-      'time': '9:30AM',
-      'amount': '\$150',
-      'type': 'Online'
-    },
-    {
-      'store': 'Doe Supplies',
-      'time': 'Yesterday',
-      'amount': '\$130',
-      'type': 'Cash'
-    },
-  ];
+  List<Map<String, dynamic>> transactions = [];
 
   @override
   void initState() {
     super.initState();
     _fetchBalance();
+    print('Shop ID: ${widget.shopId}');
+    print('Route: ${widget.routeName}');
   }
 
   Future<void> _fetchBalance() async {
-    final doc = await FirebaseFirestore.instance
+    final shopRef = FirebaseFirestore.instance
         .collection('routes')
         .doc(widget.routeName)
         .collection('shops')
-        .doc(widget.shopId)
-        .get();
+        .doc(widget.shopId);
+
+    final doc = await shopRef.get();
 
     if (doc.exists) {
       final data = doc.data();
@@ -63,84 +48,157 @@ class _BalanceScreenState extends State<BalanceScreen> {
         balanceAmount = (data?['amount'] ?? 0).toDouble();
       });
     }
+
+    // Fetch transactions
+    final txSnapshot = await shopRef
+        .collection('transactions')
+        .orderBy('timestamp', descending: true)
+        .get();
+
+    print('Transaction docs fetched: ${txSnapshot.docs.length}');
+    for (var doc in txSnapshot.docs) {
+      print('Doc: ${doc.id} => ${doc.data()}');
+    }
+
+    final txList = txSnapshot.docs.map((doc) {
+      final tx = doc.data();
+      return {
+        'time': tx['timestamp'], // ✅ use correct key here
+        'amount': tx['amount'],
+        'type': tx['type'] ?? 'Cash',
+        'store': widget.shopName, // optional: reuse shop name
+      };
+    }).toList();
+
+    setState(() {
+      transactions = txList;
+    });
   }
 
-  void _showAdjustDialog() {
-    final TextEditingController controller = TextEditingController();
+void _showAdjustDialog() {
+  final TextEditingController controller = TextEditingController();
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Adjust Balance"),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              hintText: "Enter amount to reduce",
+  showDialog(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            title: const Text("Adjust Balance"),
+            content: TextField(
+              controller: controller,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                hintText: "Enter amount to reduce",
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final input = controller.text;
-                final double? reduction = double.tryParse(input);
-                if (reduction != null &&
-                    reduction > 0 &&
-                    reduction <= (balanceAmount ?? 0)) {
-                  final newBalance = (balanceAmount ?? 0) - reduction;
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel",
+                    style: TextStyle(color: Colors.black),),
+              ),
+              ElevatedButton(
+                onPressed: _isProcessing
+                    ? null
+                    : () async {
+                        final input = controller.text;
+                        final double? reduction = double.tryParse(input);
 
-                  // Update Firestore
-                  await FirebaseFirestore.instance
-                      .collection('routes')
-                      .doc(widget.routeName)
-                      .collection('shops')
-                      .doc(widget.shopId)
-                      .update({
-                    'amount': newBalance,
-                    'status': newBalance == 0 ? 'Unpaid' : 'Paid',
-                  });
+                        if (reduction != null &&
+                            reduction > 0 &&
+                            reduction <= (balanceAmount ?? 0)) {
+                          setStateDialog(() {
+                            _isProcessing = true;
+                          });
 
-                  setState(() {
-                    balanceAmount = newBalance;
-                  });
+                          final newBalance =
+                              (balanceAmount ?? 0) - reduction;
 
-                  widget.onBalanceAdjusted(widget.shopName, reduction);
-                  Navigator.pop(context); // Close input dialog
+                          try {
+                            final shopDoc = FirebaseFirestore.instance
+                                .collection('routes')
+                                .doc(widget.routeName)
+                                .collection('shops')
+                                .doc(widget.shopId);
 
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      content: Text(
-                          "Successfully reduced LKR ${reduction.toStringAsFixed(2)} from balance."),
-                      actions: [
-                        TextButton(
-                          onPressed: () {
-                            FocusScope.of(context).unfocus();
-                            Navigator.pop(context);
-                          },
-                          child: const Text("OK"),
+                            await shopDoc.update({
+                              'amount': newBalance,
+                              'status': newBalance == 0
+                                  ? 'Unpaid'
+                                  : 'Paid',
+                            });
+
+                            await shopDoc
+                                .collection('transactions')
+                                .add({
+                              'amount': reduction,
+                              'timestamp': FieldValue.serverTimestamp(),
+                            });
+
+                            setState(() {
+                              balanceAmount = newBalance;
+                            });
+
+                            widget.onBalanceAdjusted(
+                                widget.shopName, reduction);
+
+                            Navigator.pop(context); // Close dialog
+
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                content: Text(
+                                    "Successfully reduced LKR ${reduction.toStringAsFixed(2)} from balance."),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                    },
+                                    child: const Text("OK", style: TextStyle(color: Colors.black),),
+                                  ),
+                                ],
+                              ),
+                            );
+                          } catch (e) {
+                            setStateDialog(() {
+                              _isProcessing = false;
+                            });
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(
+                                      "Error reducing balance: $e")),
+                            );
+                          }
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content:
+                                    Text("Invalid amount entered")),
+                          );
+                        }
+                      },
+                child: _isProcessing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
                         ),
-                      ],
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Invalid amount entered")),
-                  );
-                }
-              },
-              child: const Text("Enter"),
-            ),
-          ],
-        );
-      },
-    );
-  }
+                      )
+                    : const Text("Enter", style: TextStyle(color: Colors.black),),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -229,29 +287,21 @@ class _BalanceScreenState extends State<BalanceScreen> {
                                 style: const TextStyle(
                                     fontSize: 16, fontWeight: FontWeight.w500)),
                             const SizedBox(height: 4),
-                            Text(tx['time']!,
-                                style: const TextStyle(color: Colors.grey)),
+                            Text(
+                              tx['time'] != null
+                                  ? (tx['time'] as Timestamp)
+                                      .toDate()
+                                      .toString()
+                                      .substring(0, 16)
+                                  : 'Unknown',
+                              style: const TextStyle(color: Colors.grey),
+                            ),
                           ],
                         ),
-                        Row(
-                          children: [
-                            Text(tx['amount']!,
-                                style: const TextStyle(
-                                    fontSize: 16, fontWeight: FontWeight.w600)),
-                            const SizedBox(width: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: tx['type'] == 'Cash'
-                                    ? Colors.grey.shade300
-                                    : Colors.blue.shade100,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(tx['type']!,
-                                  style: const TextStyle(fontSize: 12)),
-                            )
-                          ],
+                        Text(
+                          'LKR ${tx['amount'].toString()}',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
