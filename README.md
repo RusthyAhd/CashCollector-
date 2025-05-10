@@ -1,6 +1,6 @@
 # 🚀 Pegas Flow App
 
-![Pegas Flow Banner](https://unsplash.com/photos/graphical-user-interface-0KMCxhGFKvc?utm_content=creditShareLink&utm_medium=referral&utm_source=unsplash)
+![Pegas Flow Banner](https://images.unsplash.com/photo-1604472737449-01a3a61b5a51?auto=format&fit=crop&w=1350&q=80)
 
 **Pegas Flow** is a professional-grade mobile application for field data entry, syncing with Google Sheets and Supabase in real time. Whether you're managing inspections, collecting reports, or organizing field staff data, Pegas Flow empowers both users and admins with seamless communication and automated syncing.
 
@@ -33,9 +33,11 @@
 
 | 📱 Mobile Field App | 🖥️ Admin Dashboard |
 |---------------------|-------------------|
-| ![Mobile UI](https://unsplash.com/photos/a-man-holding-a-cell-phone-in-front-of-a-keyboard-_EiTfumwmaU?utm_content=creditShareLink&utm_medium=referral&utm_source=unsplash) | ![Admin Dashboard](https://unsplash.com/photos/a-person-sitting-on-a-bed-with-a-laptop-XihOO7UOvy4?utm_content=creditShareLink&utm_medium=referral&utm_source=unsplash) |
+| ![Mobile UI](https://images.unsplash.com/photo-1613141411662-0210b9911b46?auto=format&fit=crop&w=600&q=80) | ![Admin Dashboard](https://images.unsplash.com/photo-1613141411662-0210b9911b46?auto=format&fit=crop&w=600&q=80) |
 
+> _Replace these images with actual screenshots of your app later._
 
+---
 
-
+## 📂 Folder Structure
 
