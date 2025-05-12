@@ -60,15 +60,18 @@ class _BalanceScreenState extends State<BalanceScreen> {
       print('Doc: ${doc.id} => ${doc.data()}');
     }
 
-    final txList = txSnapshot.docs.map((doc) {
+final txList = txSnapshot.docs
+    .where((doc) => (doc.data()['type'] ?? 'Cash') != 'Credit')
+    .map((doc) {
       final tx = doc.data();
       return {
-        'time': tx['timestamp'], // ✅ use correct key here
+        'time': tx['timestamp'],
         'amount': tx['amount'],
         'type': tx['type'] ?? 'Cash',
-        'store': widget.shopName, // optional: reuse shop name
+        'store': widget.shopName,
       };
     }).toList();
+
 
     setState(() {
       transactions = txList;
