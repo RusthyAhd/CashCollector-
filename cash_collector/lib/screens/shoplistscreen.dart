@@ -50,52 +50,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
     super.dispose();
   }
 
-  // Future<void> _loadShops() async {
-  //   setState(() => isLoading = true); // Start loading
-
-  //   final snapshot = await FirebaseFirestore.instance
-  //       .collection('routes')
-  //       .doc(widget.routeName)
-  //       .collection('shops')
-  //       .get();
-
-  //   final now = DateTime.now();
-
-  //   final shops = snapshot.docs.map((doc) {
-  //     final data = doc.data();
-  //     final paidAt = (data['paidAt'] as Timestamp?)?.toDate();
-  //     String status = data['status'] ?? 'Unpaid';
-
-  //     if (status == 'Paid' &&
-  //         paidAt != null &&
-  //         now.difference(paidAt).inMinutes >= 2) {
-  //       FirebaseFirestore.instance
-  //           .collection('routes')
-  //           .doc(widget.routeName)
-  //           .collection('shops')
-  //           .doc(doc.id)
-  //           .update({
-  //         'status': 'Unpaid',
-  //         'paidAt': null,
-  //       });
-  //       status = 'Unpaid';
-  //     }
-
-  //     return {
-  //       "id": doc.id,
-  //       "name": data['name'] ?? '',
-  //       "address": data['address'] ?? '',
-  //       "phone": data['phone'] ?? '',
-  //       "status": status,
-  //       "amount": (data['amount'] ?? 0) as num,
-  //       "totalPaid": (data['totalPaid'] ?? 0) as num,
-  //     };
-  //   }).toList();
-
-  //   setState(() {
-  //     allShops = shops;
-  //     isLoading = false;
-  //   });
   Future<void> _loadShops() async {
     setState(() => isLoading = true);
 
@@ -315,7 +269,9 @@ class _ShopListScreenState extends State<ShopListScreen> {
           ),
         ],
       ),
-      body: Padding(
+      body: RefreshIndicator(
+        onRefresh: _loadShops,
+        child:Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
@@ -536,7 +492,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
               ),
           ],
         ),
-      ),
+      ),),
     );
   }
 }
