@@ -154,7 +154,7 @@ class _RoutePageState extends State<RoutePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                      "Total Paid: ₹${totalPaidAcrossRoutes.toStringAsFixed(2)}",
+                      "Total Paid: Rs.${totalPaidAcrossRoutes.toStringAsFixed(2)}",
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),

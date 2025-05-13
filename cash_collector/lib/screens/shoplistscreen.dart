@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'balance_screen.dart';
@@ -95,6 +96,8 @@ class _ShopListScreenState extends State<ShopListScreen> {
         "amount": (data['amount'] ?? 0) as num,
         "totalPaid": (data['totalPaid'] ?? 0) as num,
         "paidAt": paidAt,
+        "latitude": (data['latitude'] as num?)?.toDouble(), // 👈 Add this
+        "longitude": (data['longitude'] as num?)?.toDouble(), // 👈 And this
       });
     }
 
@@ -227,6 +230,16 @@ class _ShopListScreenState extends State<ShopListScreen> {
     }
   }
 
+  void _launchURL(String url) async {
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Could not open Google Maps")),
+      );
+    }
+  }
+
   String formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
     final hours = twoDigits(duration.inHours);
@@ -269,230 +282,263 @@ class _ShopListScreenState extends State<ShopListScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadShops,
-        child:Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: _searchController,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: "Search by area",
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.grey.shade200,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => setState(() => showUnpaid = true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          showUnpaid ? Colors.blue : Colors.grey.shade200,
-                      foregroundColor: showUnpaid ? Colors.white : Colors.black,
-                    ),
-                    child: const Text("Unpaid"),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      setState(() => showUnpaid = false);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                              "🔴Refresh the page to see the time remaining🔴"),
-                          duration: Duration(seconds: 3),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: !showUnpaid
-                          ? Colors.green.shade600
-                          : Colors.grey.shade200,
-                      foregroundColor:
-                          !showUnpaid ? Colors.white : Colors.black,
-                    ),
-                    child: const Text("Paid"),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _loadShops,
-                child: ListView.builder(
-                  itemCount: filteredShops.length,
-                  itemBuilder: (context, index) {
-                    final shop = filteredShops[index];
-                    final name = shop['name'];
-                    final status = shop['status'];
-                    final paidAt = shop['paidAt'] as DateTime?;
-                    int remainingSeconds = 0;
-
-                    if (shop['status'] == 'Paid' && paidAt != null) {
-                      final diff = DateTime.now().difference(paidAt).inSeconds;
-                      remainingSeconds = 43200 - diff; // or 43200 for 12 hours
-                      if (remainingSeconds < 0) remainingSeconds = 0;
-                    }
-
-                    return Card(
-                      color: Colors.blueGrey.shade900,
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      child: ListTile(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => BalanceScreen(
-                                shopName: shop['name'],
-                                routeName: widget.routeName,
-                                shopId:
-                                    shop['id'], // must be doc ID from Firestore
-                                onBalanceAdjusted:
-                                    (shopName, reducedAmount) async {
-                                  final updatedShops =
-                                      List<Map<String, dynamic>>.from(allShops);
-
-                                  final shopIndex = updatedShops.indexWhere(
-                                      (shop) => shop['name'] == shopName);
-                                  if (shopIndex != -1) {
-                                    final shopId = updatedShops[shopIndex][
-                                        'id']; // Make sure you're storing Firestore doc IDs
-                                    final currentAmount =
-                                        updatedShops[shopIndex]['amount'];
-                                    final newAmount =
-                                        currentAmount - reducedAmount;
-
-                                    // Update Firestore
-                                    await FirebaseFirestore.instance
-                                        .collection('routes')
-                                        .doc(widget.routeName)
-                                        .collection('shops')
-                                        .doc(shopId)
-                                        .update({
-                                      'status': 'Paid',
-                                      'amount': newAmount,
-                                      'paidAt': FieldValue.serverTimestamp(),
-                                      'paidAmount':
-                                          reducedAmount, // just the last payment
-                                      'totalPaid': FieldValue.increment(
-                                          reducedAmount), // running total
-                                    });
-
-                                    setState(() {
-                                      updatedShops[shopIndex]['status'] =
-                                          'Paid';
-                                      updatedShops[shopIndex]['amount'] =
-                                          newAmount;
-                                      allShops = updatedShops;
-                                    });
-
-                                    _startCountdown(shopName);
-                                    _fetchTotalPaidAcrossAllRoutes(); // 👈 added here
-                                  }
-                                },
-                              ),
-                            ),
-                          );
-                        },
-                        title: Text(
-                          name,
-                          style: const TextStyle(
-                              color: Colors.yellow,
-                              fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(shop['address'],
-                                style: const TextStyle(color: Colors.white)),
-                            Text(shop['phone'],
-                                style: const TextStyle(color: Colors.white)),
-                            // if (shop['status'] == 'Paid' &&
-                            //     shop['totalPaid'] != null)
-                            //   Text("Paid: Rs.${shop['totalPaid']}",
-                            //       style: const TextStyle(
-                            //           color: Colors.lightGreenAccent)),
-                            if (shop['status'] == 'Paid' &&
-                                shop['totalPaid'] != null)
-                              Text("Paid: Rs.${shop['totalPaid']}",
-                                  style: const TextStyle(
-                                      color: Colors.lightGreenAccent))
-                            else if (shop['status'] == 'Unpaid' &&
-                                shop['amount'] != null)
-                              Text("Balance: Rs.${shop['amount']}",
-                                  style: const TextStyle(
-                                      color: Colors.orangeAccent)),
-                          ],
-                        ),
-                        trailing:
-                            shop['status'] == 'Paid' && remainingSeconds > 0
-                                ? Text(
-                                    "Reverting in ${formatDuration(Duration(seconds: remainingSeconds))}",
-                                    style: const TextStyle(
-                                      color: Colors.red,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  )
-                                : const Icon(Icons.location_pin,
-                                    color: Colors.pinkAccent),
-                      ),
-                    );
-                  },
-                ),
-              ), // Change from 12 hours
-            ),
-            if (!showUnpaid)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade100,
-                  borderRadius: BorderRadius.circular(10),
-                ),
+      body: isLoading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : RefreshIndicator(
+              onRefresh: _loadShops,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
                 child: Column(
                   children: [
+                    TextField(
+                      controller: _searchController,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        hintText: "Search by area",
+                        prefixIcon: const Icon(Icons.search),
+                        filled: true,
+                        fillColor: Colors.grey.shade200,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text("Route Total (12h): ",
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        Text("Rs.${routeTotalPaid.toInt()}",
-                            style: const TextStyle(
-                                fontSize: 16, color: Colors.teal)),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => setState(() => showUnpaid = true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: showUnpaid
+                                  ? Colors.blue
+                                  : Colors.grey.shade200,
+                              foregroundColor:
+                                  showUnpaid ? Colors.white : Colors.black,
+                            ),
+                            child: const Text("Unpaid"),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              setState(() => showUnpaid = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      "🔴Refresh the page to see the time remaining🔴"),
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: !showUnpaid
+                                  ? Colors.green.shade600
+                                  : Colors.grey.shade200,
+                              foregroundColor:
+                                  !showUnpaid ? Colors.white : Colors.black,
+                            ),
+                            child: const Text("Paid"),
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 5),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text("All Routes Total Paid: ",
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        Text("Rs.${totalPaidAcrossRoutes.toInt()}",
-                            style: const TextStyle(
-                                fontSize: 16,
-                                color: Color.fromARGB(255, 156, 5, 5))),
-                      ],
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _loadShops,
+                        child: ListView.builder(
+                          itemCount: filteredShops.length,
+                          itemBuilder: (context, index) {
+                            final shop = filteredShops[index];
+                            final name = shop['name'];
+                            final status = shop['status'];
+                            final paidAt = shop['paidAt'] as DateTime?;
+                            int remainingSeconds = 0;
+
+                            if (shop['status'] == 'Paid' && paidAt != null) {
+                              final diff =
+                                  DateTime.now().difference(paidAt).inSeconds;
+                              remainingSeconds =
+                                  43200 - diff; // or 43200 for 12 hours
+                              if (remainingSeconds < 0) remainingSeconds = 0;
+                            }
+
+                            return Card(
+                              color: Colors.blueGrey.shade900,
+                              margin: const EdgeInsets.symmetric(vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              child: ListTile(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => BalanceScreen(
+                                        shopName: shop['name'],
+                                        routeName: widget.routeName,
+                                        shopId: shop[
+                                            'id'], // must be doc ID from Firestore
+                                        onBalanceAdjusted:
+                                            (shopName, reducedAmount) async {
+                                          final updatedShops =
+                                              List<Map<String, dynamic>>.from(
+                                                  allShops);
+                                          final shopIndex =
+                                              updatedShops.indexWhere((shop) =>
+                                                  shop['name'] == shopName);
+                                          if (shopIndex != -1) {
+                                            final shopId = updatedShops[
+                                                    shopIndex][
+                                                'id']; // Make sure you're storing Firestore doc IDs
+                                            final currentAmount =
+                                                updatedShops[shopIndex]
+                                                    ['amount'];
+                                            final newAmount =
+                                                currentAmount - reducedAmount;
+
+                                            // Update Firestore
+                                            await FirebaseFirestore.instance
+                                                .collection('routes')
+                                                .doc(widget.routeName)
+                                                .collection('shops')
+                                                .doc(shopId)
+                                                .update({
+                                              'status': 'Paid',
+                                              'amount': newAmount,
+                                              'paidAt':
+                                                  FieldValue.serverTimestamp(),
+                                              'paidAmount':
+                                                  reducedAmount, // just the last payment
+                                              'totalPaid': FieldValue.increment(
+                                                  reducedAmount), // running total
+                                            });
+
+                                            setState(() {
+                                              updatedShops[shopIndex]
+                                                  ['status'] = 'Paid';
+                                              updatedShops[shopIndex]
+                                                  ['amount'] = newAmount;
+                                              allShops = updatedShops;
+                                            });
+
+                                            _startCountdown(shopName);
+                                            _fetchTotalPaidAcrossAllRoutes(); // 👈 added here
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                },
+                                title: Text(
+                                  name,
+                                  style: const TextStyle(
+                                      color: Colors.yellow,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(shop['address'],
+                                        style: const TextStyle(
+                                            color: Colors.white)),
+                                    Text(shop['phone'],
+                                        style: const TextStyle(
+                                            color: Colors.white)),
+                                    if (shop['status'] == 'Paid' &&
+                                        shop['totalPaid'] != null)
+                                      Text("Paid: Rs.${shop['totalPaid']}",
+                                          style: const TextStyle(
+                                              color: Colors.lightGreenAccent))
+                                    else if (shop['status'] == 'Unpaid' &&
+                                        shop['amount'] != null)
+                                      Text("Balance: Rs.${shop['amount']}",
+                                          style: const TextStyle(
+                                              color: Colors.orangeAccent)),
+                                  ],
+                                ),
+                                trailing: shop['status'] == 'Paid' &&
+                                        remainingSeconds > 0
+                                    ? Text(
+                                        "Reverting in ${formatDuration(Duration(seconds: remainingSeconds))}",
+                                        style: const TextStyle(
+                                          color: Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      )
+                                    : IconButton(
+                                        icon: const Icon(Icons.location_pin,
+                                            color: Colors.pinkAccent),
+                                        onPressed: () {
+                                          final lat = shop['latitude'];
+                                          final lng = shop['longitude'];
+
+                                          if (lat == null || lng == null) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                  content: Text(
+                                                      "Location not available for this shop")),
+                                            );
+                                          } else {
+                                            final googleMapsUrl = Uri.parse(
+                                                "https://www.google.com/maps/search/?api=1&query=$lat,$lng");
+                                            launchUrl(googleMapsUrl,
+                                                mode: LaunchMode
+                                                    .externalApplication);
+                                          }
+                                        },
+                                      ),
+                              ),
+                            );
+                          },
+                        ),
+                      ), // Change from 12 hours
                     ),
+                    if (!showUnpaid)
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade100,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text("Route Total (12h): ",
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
+                                Text("Rs.${routeTotalPaid.toInt()}",
+                                    style: const TextStyle(
+                                        fontSize: 16, color: Colors.teal)),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text("All Routes Total Paid: ",
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
+                                Text("Rs.${totalPaidAcrossRoutes.toInt()}",
+                                    style: const TextStyle(
+                                        fontSize: 16,
+                                        color: Color.fromARGB(255, 156, 5, 5))),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
-          ],
-        ),
-      ),),
+            ),
     );
   }
 }
