@@ -1,13 +1,12 @@
 buildscript {
     repositories {
-        google()         // ✅ Required for Firebase
-        mavenCentral()   // ✅ Also useful
+        google()
+        mavenCentral()
     }
     dependencies {
-        classpath 'com.google.gms:google-services:4.4.0' // ✅ Firebase plugin
+        classpath 'com.google.gms:google-services:4.4.0' // Firebase plugin
     }
 }
-
 
 allprojects {
     repositories {
@@ -17,9 +16,11 @@ allprojects {
 }
 
 rootProject.buildDir = "../build"
+
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
+
 subprojects {
     project.evaluationDependsOn(":app")
 }

@@ -31,8 +31,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
   void initState() {
     super.initState();
     _loadShops();
-    _fetchTotalPaidAcrossAllRoutes(); // 👈 added here
-    _fetchRouteTotalPaidInLast12Hours(); // 👈 ADD THIS
     _startUiUpdater();
   }
 
@@ -83,7 +81,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
               .update({'status': 'Unpaid', 'paidAt': null});
 
           status = 'Unpaid';
-          await _fetchRouteTotalPaidInLast12Hours(); // 👈 ADD THIS TOO
         }
       }
 
@@ -112,10 +109,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
     }
   }
 
-  Future<void> _saveShops() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('shops', json.encode(allShops));
-  }
 
   Future<void> _startCountdown(String shopName, {DateTime? paidAt}) async {
     if (countdowns.containsKey(shopName)) return;
@@ -163,72 +156,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
     });
   }
 
-  Future<void> _fetchTotalPaidAcrossAllRoutes() async {
-    double total = 0;
-    final now = DateTime.now();
-
-    final routesSnapshot =
-        await FirebaseFirestore.instance.collection('routes').get();
-
-    for (var routeDoc in routesSnapshot.docs) {
-      final shopsSnapshot = await routeDoc.reference.collection('shops').get();
-
-      for (var shopDoc in shopsSnapshot.docs) {
-        final shopData = shopDoc.data();
-        final status = shopData['status'];
-        final totalPaid = shopData['totalPaid'];
-        final paidAtTimestamp = shopData['paidAt'] as Timestamp?;
-
-        if (status == 'Paid' && totalPaid != null && paidAtTimestamp != null) {
-          final paidAt = paidAtTimestamp.toDate();
-          final secondsAgo = now.difference(paidAt).inSeconds;
-
-          if (secondsAgo <= 43200) {
-            // Only within last 2 minutes
-            total += (totalPaid as num).toDouble();
-          }
-        }
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        totalPaidAcrossRoutes = total;
-      });
-    }
-  }
-
-  Future<void> _fetchRouteTotalPaidInLast12Hours() async {
-    double total = 0;
-    final now = DateTime.now();
-    final shopsSnapshot = await FirebaseFirestore.instance
-        .collection('routes')
-        .doc(widget.routeName)
-        .collection('shops')
-        .get();
-
-    for (var shopDoc in shopsSnapshot.docs) {
-      final shopData = shopDoc.data();
-      final status = shopData['status'];
-      final totalPaid = shopData['totalPaid'];
-      final paidAtTimestamp = shopData['paidAt'] as Timestamp?;
-
-      if (status == 'Paid' && totalPaid != null && paidAtTimestamp != null) {
-        final paidAt = paidAtTimestamp.toDate();
-        final secondsAgo = now.difference(paidAt).inSeconds;
-
-        if (secondsAgo <= 43200) {
-          total += (totalPaid as num).toDouble();
-        }
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        routeTotalPaid = total;
-      });
-    }
-  }
 
   void _launchURL(String url) async {
     if (await canLaunchUrl(Uri.parse(url))) {
@@ -427,7 +354,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
                                             });
 
                                             _startCountdown(shopName);
-                                            _fetchTotalPaidAcrossAllRoutes(); // 👈 added here
                                           }
                                         },
                                       ),
@@ -499,42 +425,8 @@ class _ShopListScreenState extends State<ShopListScreen> {
                         ),
                       ), // Change from 12 hours
                     ),
-                    if (!showUnpaid)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade100,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text("Route Total (12h): ",
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                                Text("Rs.${routeTotalPaid.toInt()}",
-                                    style: const TextStyle(
-                                        fontSize: 16, color: Colors.teal)),
-                              ],
-                            ),
-                            const SizedBox(height: 5),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text("All Routes Total Paid: ",
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                                Text("Rs.${totalPaidAcrossRoutes.toInt()}",
-                                    style: const TextStyle(
-                                        fontSize: 16,
-                                        color: Color.fromARGB(255, 156, 5, 5))),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
+                 
+                     
                   ],
                 ),
               ),
