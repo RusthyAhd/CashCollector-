@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:convert';
 import 'dart:async';
 import 'balance_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -92,6 +90,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
         "status": status,
         "amount": (data['amount'] ?? 0) as num,
         "totalPaid": (data['totalPaid'] ?? 0) as num,
+        "paidAmount": (data['paidAmount'] ?? 0) as num, 
         "paidAt": paidAt,
         "latitude": (data['latitude'] as num?)?.toDouble(), // 👈 Add this
         "longitude": (data['longitude'] as num?)?.toDouble(), // 👈 And this
@@ -108,7 +107,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
       }
     }
   }
-
 
   Future<void> _startCountdown(String shopName, {DateTime? paidAt}) async {
     if (countdowns.containsKey(shopName)) return;
@@ -156,16 +154,15 @@ class _ShopListScreenState extends State<ShopListScreen> {
     });
   }
 
-
-  void _launchURL(String url) async {
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Could not open Google Maps")),
-      );
-    }
-  }
+  // void _launchURL(String url) async {
+  //   if (await canLaunchUrl(Uri.parse(url))) {
+  //     await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  //   } else {
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       const SnackBar(content: Text("Could not open Google Maps")),
+  //     );
+  //   }
+  // }
 
   String formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
@@ -376,8 +373,8 @@ class _ShopListScreenState extends State<ShopListScreen> {
                                         style: const TextStyle(
                                             color: Colors.white)),
                                     if (shop['status'] == 'Paid' &&
-                                        shop['totalPaid'] != null)
-                                      Text("Paid: Rs.${shop['totalPaid']}",
+                                        shop['paidAmount'] != null)
+                                      Text("Paid: Rs.${shop['paidAmount']}",
                                           style: const TextStyle(
                                               color: Colors.lightGreenAccent))
                                     else if (shop['status'] == 'Unpaid' &&
@@ -425,8 +422,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
                         ),
                       ), // Change from 12 hours
                     ),
-                 
-                     
                   ],
                 ),
               ),

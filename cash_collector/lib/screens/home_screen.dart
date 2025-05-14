@@ -22,6 +22,36 @@ class _RoutePageState extends State<RoutePage> {
     _fetchTotalPaidAcrossAllRoutes();
   }
 
+  Future<void> _fetchTotalPaidAcrossAllRoutes() async {
+    double totalPaid = 0;
+
+    final routesSnapshot =
+        await FirebaseFirestore.instance.collection('routes').get();
+
+    for (var routeDoc in routesSnapshot.docs) {
+      final shopsSnapshot = await routeDoc.reference.collection('shops').get();
+
+      for (var shopDoc in shopsSnapshot.docs) {
+        final shopData = shopDoc.data();
+        final shopTotalPaid = shopData['totalPaid'];
+
+        if (shopTotalPaid != null) {
+          totalPaid += (shopTotalPaid as num).toDouble();
+        }
+      }
+    }
+    // ✅ Save totalPaid to Firestore (admin/summary)
+    await FirebaseFirestore.instance.collection('admin').doc('summary').set({
+      'latestTotalPaid': totalPaid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    // ✅ Update local state
+    setState(() {
+      totalPaidAcrossRoutes = totalPaid;
+    });
+  }
+
   void openGoogleForm() async {
     final amountText = amountSentController.text.trim();
 
@@ -86,37 +116,6 @@ class _RoutePageState extends State<RoutePage> {
         const SnackBar(content: Text("Could not open Google Form")),
       );
     }
-  }
-
-  Future<void> _fetchTotalPaidAcrossAllRoutes() async {
-    double totalPaid = 0;
-
-    final routesSnapshot =
-        await FirebaseFirestore.instance.collection('routes').get();
-
-    for (var routeDoc in routesSnapshot.docs) {
-      final shopsSnapshot = await routeDoc.reference.collection('shops').get();
-
-      for (var shopDoc in shopsSnapshot.docs) {
-        final shopData = shopDoc.data();
-        final status = shopData['status'];
-        final shopTotalPaid = shopData['totalPaid'];
-
-        if (status == 'Paid' && shopTotalPaid != null) {
-          totalPaid += (shopTotalPaid as num).toDouble();
-        }
-      }
-    }
-
-    // ✅ Save totalPaid before deduction to Firestore
-    await FirebaseFirestore.instance.collection('admin').doc('summary').set({
-      'totalPaidBeforeDeductions': totalPaid,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    setState(() {
-      totalPaidAcrossRoutes = totalPaid;
-    });
   }
 
   @override
@@ -218,7 +217,7 @@ class _RoutePageState extends State<RoutePage> {
               ),
             ),
             const Divider(),
-             Padding(
+            Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -288,12 +287,12 @@ class _RoutePageState extends State<RoutePage> {
                         'sentAt': FieldValue.serverTimestamp(),
                       }, SetOptions(merge: true));
 
-                      // Step 1: Gather all paid shops
+                      // Step 1: Gather all shops with totalPaid > 0
                       final routesSnapshot = await FirebaseFirestore.instance
                           .collection('routes')
                           .get();
-
                       double remainingToDeduct = amount;
+                      const double epsilon = 0.01;
 
                       for (var routeDoc in routesSnapshot.docs) {
                         final shopsSnapshot =
@@ -301,59 +300,60 @@ class _RoutePageState extends State<RoutePage> {
 
                         for (var shopDoc in shopsSnapshot.docs) {
                           final shopData = shopDoc.data();
+                          double shopPaid =
+                              (shopData['totalPaid'] ?? 0).toDouble();
 
-                          if (shopData['status'] == 'Paid') {
-                            double shopPaid =
-                                (shopData['totalPaid'] ?? 0).toDouble();
+                          // 🛑 Skip shops with no amount
+                          if (shopPaid <= epsilon ||
+                              remainingToDeduct <= epsilon) continue;
 
-                            if (shopPaid == 0 || remainingToDeduct <= 0)
-                              continue;
+                          double deduction;
+                          if (remainingToDeduct >= shopPaid - epsilon) {
+                            // Deduct full amount
+                            deduction = shopPaid;
+                            remainingToDeduct -= deduction;
 
-                            double deduction = 0;
-                            if (remainingToDeduct >= shopPaid) {
-                              // Deduct full shop amount
-                              deduction = shopPaid;
-                              remainingToDeduct -= shopPaid;
+                            await shopDoc.reference
+                                .collection('transactions')
+                                .add({
+                              'type': 'paid',
+                              'amount': deduction,
+                              'resetAt': FieldValue.serverTimestamp(),
+                            });
 
-                              // Archive full payment
-                              await shopDoc.reference
-                                  .collection('transactions')
-                                  .add({
-                                'type': 'paid',
-                                'amount': shopPaid,
-                                'resetAt': FieldValue.serverTimestamp(),
-                              });
+                            await shopDoc.reference.update({
+                              'status': 'Unpaid',
+                              'totalPaid': 0,
+                            });
+                          } else {
+                            // Partial deduction
+                            deduction = remainingToDeduct;
+                            remainingToDeduct = 0;
 
-                              // Reset this shop
-                              await shopDoc.reference.update({
-                                'status': 'Unpaid',
-                                'totalPaid': 0,
-                              });
-                            } else {
-                              // Deduct partial amount from this shop
-                              deduction = remainingToDeduct;
-                              remainingToDeduct = 0;
+                            await shopDoc.reference
+                                .collection('transactions')
+                                .add({
+                              'type': 'partialPaid',
+                              'amount': deduction,
+                              'resetAt': FieldValue.serverTimestamp(),
+                            });
 
-                              await shopDoc.reference
-                                  .collection('transactions')
-                                  .add({
-                                'type': 'partialPaid',
-                                'amount': deduction,
-                                'resetAt': FieldValue.serverTimestamp(),
-                              });
+                            double updatedPaid = shopPaid - deduction;
+                            if (updatedPaid <= epsilon) updatedPaid = 0;
 
-                              // Update remaining amount in shop
-                              await shopDoc.reference.update({
-                                'totalPaid': shopPaid - deduction,
-                              });
+                            await shopDoc.reference.update({
+                              'totalPaid': updatedPaid,
+                            });
 
-                              // Stop once deduction is complete
-                              break;
-                            }
+                            break; // Done deducting
                           }
                         }
 
-                        if (remainingToDeduct <= 0) break;
+                        if (remainingToDeduct <= epsilon) break;
+                      }
+                      if (remainingToDeduct > epsilon) {
+                        print(
+                            "⚠️ Still remaining to deduct: $remainingToDeduct");
                       }
 
                       await _fetchTotalPaidAcrossAllRoutes();
@@ -366,7 +366,11 @@ class _RoutePageState extends State<RoutePage> {
                         ),
                       );
                     },
-                    child: Center(child: const Text("Submit Receipt & Amount", style: TextStyle(color: Colors.black),)),
+                    child: Center(
+                        child: const Text(
+                      "Submit Receipt & Amount",
+                      style: TextStyle(color: Colors.black),
+                    )),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color.fromARGB(255, 113, 182, 116),
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -379,9 +383,7 @@ class _RoutePageState extends State<RoutePage> {
               ),
             ),
           ],
-          
         ),
-        
       ),
     );
   }
