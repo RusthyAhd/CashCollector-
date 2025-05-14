@@ -90,6 +90,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
         "status": status,
         "amount": (data['amount'] ?? 0) as num,
         "totalPaid": (data['totalPaid'] ?? 0) as num,
+        "paidAmount": (data['paidAmount'] ?? 0) as num, 
         "paidAt": paidAt,
         "latitude": (data['latitude'] as num?)?.toDouble(), // 👈 Add this
         "longitude": (data['longitude'] as num?)?.toDouble(), // 👈 And this
@@ -106,7 +107,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
       }
     }
   }
-
 
   Future<void> _startCountdown(String shopName, {DateTime? paidAt}) async {
     if (countdowns.containsKey(shopName)) return;
@@ -153,7 +153,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
       });
     });
   }
-
 
   // void _launchURL(String url) async {
   //   if (await canLaunchUrl(Uri.parse(url))) {
@@ -374,8 +373,8 @@ class _ShopListScreenState extends State<ShopListScreen> {
                                         style: const TextStyle(
                                             color: Colors.white)),
                                     if (shop['status'] == 'Paid' &&
-                                        shop['totalPaid'] != null)
-                                      Text("Paid: Rs.${shop['totalPaid']}",
+                                        shop['paidAmount'] != null)
+                                      Text("Paid: Rs.${shop['paidAmount']}",
                                           style: const TextStyle(
                                               color: Colors.lightGreenAccent))
                                     else if (shop['status'] == 'Unpaid' &&
@@ -423,8 +422,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
                         ),
                       ), // Change from 12 hours
                     ),
-                 
-                     
                   ],
                 ),
               ),
