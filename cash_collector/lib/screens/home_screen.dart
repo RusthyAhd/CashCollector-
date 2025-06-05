@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'shoplistscreen.dart';
 
 class RoutePage extends StatefulWidget {
@@ -12,7 +11,6 @@ class RoutePage extends StatefulWidget {
 
 class _RoutePageState extends State<RoutePage> {
   double totalPaidAcrossRoutes = 0;
-  TextEditingController amountSentController = TextEditingController();
   bool isUploading = false;
   String? uploadedFileUrl;
 
@@ -51,73 +49,6 @@ class _RoutePageState extends State<RoutePage> {
       totalPaidAcrossRoutes = totalPaid;
     });
   }
-
-  void openGoogleForm() async {
-    final amountText = amountSentController.text.trim();
-
-    if (amountText.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter the amount sent")),
-      );
-      return;
-    }
-
-    final double? amountSent = double.tryParse(amountText);
-    if (amountSent == null || amountSent <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Enter a valid amount")),
-      );
-      return;
-    }
-
-    // ✅ Save the deduction entry for history
-    await FirebaseFirestore.instance.collection('deductions').add({
-      'amount': amountSent,
-      'sentAt': FieldValue.serverTimestamp(),
-    });
-
-    // ✅ Save summary
-    await FirebaseFirestore.instance.collection('admin').doc('summary').set({
-      'lastSentAmount': amountSent,
-      'sentAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    // ✅ Reset all shops with status == 'Paid'
-    final routesSnapshot =
-        await FirebaseFirestore.instance.collection('routes').get();
-
-    for (var routeDoc in routesSnapshot.docs) {
-      final shopsSnapshot = await routeDoc.reference.collection('shops').get();
-
-      for (var shopDoc in shopsSnapshot.docs) {
-        final shopData = shopDoc.data();
-        if (shopData['status'] == 'Paid') {
-          await shopDoc.reference.update({
-            'status': 'Unpaid',
-            'totalPaid': 0,
-          });
-        }
-      }
-    }
-
-    // ✅ Reset total paid locally
-    setState(() {
-      totalPaidAcrossRoutes = 0;
-    });
-
-    // 🌐 Open Google Form with amount prefilled
-    final formUrl = Uri.encodeFull(
-      'https://docs.google.com/forms/d/e/1FAIpQLScQIdIMPBP7sUj7crDtZimYXWNWy-Wiq4oXACgbKxoxqPvHRQ/viewform?usp=pp_url&entry.139912917=$amountSent',
-    );
-
-    if (!await launchUrl(Uri.parse(formUrl),
-        mode: LaunchMode.externalApplication)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Could not open Google Form")),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -233,152 +164,7 @@ class _RoutePageState extends State<RoutePage> {
                       child: Text("Receipt Uploaded ✅",
                           style: const TextStyle(color: Colors.green)),
                     ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: amountSentController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: "Amount Sent to Owner",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: () async {
-                      final amountText = amountSentController.text.trim();
-
-                      if (amountText.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text("Please enter an amount.")),
-                        );
-                        return;
-                      }
-
-                      final amount = double.tryParse(amountText);
-                      if (amount == null || amount <= 0) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text("Please enter a valid amount.")),
-                        );
-                        return;
-                      }
-
-                      // Launch Google Form with prefilled amount
-                      final formUrl = Uri.encodeFull(
-                        'https://docs.google.com/forms/d/e/1FAIpQLScQIdIMPBP7sUj7crDtZimYXWNWy-Wiq4oXACgbKxoxqPvHRQ/viewform?usp=pp_url&entry.139912917=$amount',
-                      );
-                      await launchUrl(Uri.parse(formUrl));
-
-                      // Save deduction record
-                      await FirebaseFirestore.instance
-                          .collection('deductions')
-                          .add({
-                        'amount': amount,
-                        'sentAt': FieldValue.serverTimestamp(),
-                      });
-
-                      // Save admin summary
-                      await FirebaseFirestore.instance
-                          .collection('admin')
-                          .doc('summary')
-                          .set({
-                        'lastSentAmount': amount,
-                        'sentAt': FieldValue.serverTimestamp(),
-                      }, SetOptions(merge: true));
-
-                      // Step 1: Gather all shops with totalPaid > 0
-                      final routesSnapshot = await FirebaseFirestore.instance
-                          .collection('routes')
-                          .get();
-                      double remainingToDeduct = amount;
-                      const double epsilon = 0.01;
-
-                      for (var routeDoc in routesSnapshot.docs) {
-                        final shopsSnapshot =
-                            await routeDoc.reference.collection('shops').get();
-
-                        for (var shopDoc in shopsSnapshot.docs) {
-                          final shopData = shopDoc.data();
-                          double shopPaid =
-                              (shopData['totalPaid'] ?? 0).toDouble();
-
-                          // 🛑 Skip shops with no amount
-                          if (shopPaid <= epsilon ||
-                              remainingToDeduct <= epsilon) continue;
-
-                          double deduction;
-                          if (remainingToDeduct >= shopPaid - epsilon) {
-                            // Deduct full amount
-                            deduction = shopPaid;
-                            remainingToDeduct -= deduction;
-
-                            await shopDoc.reference
-                                .collection('transactions')
-                                .add({
-                              'type': 'paid',
-                              'amount': deduction,
-                              'resetAt': FieldValue.serverTimestamp(),
-                            });
-
-                            await shopDoc.reference.update({
-                              'status': 'Unpaid',
-                              'totalPaid': 0,
-                            });
-                          } else {
-                            // Partial deduction
-                            deduction = remainingToDeduct;
-                            remainingToDeduct = 0;
-
-                            await shopDoc.reference
-                                .collection('transactions')
-                                .add({
-                              'type': 'partialPaid',
-                              'amount': deduction,
-                              'resetAt': FieldValue.serverTimestamp(),
-                            });
-
-                            double updatedPaid = shopPaid - deduction;
-                            if (updatedPaid <= epsilon) updatedPaid = 0;
-
-                            await shopDoc.reference.update({
-                              'totalPaid': updatedPaid,
-                            });
-
-                            break; // Done deducting
-                          }
-                        }
-
-                        if (remainingToDeduct <= epsilon) break;
-                      }
-                      if (remainingToDeduct > epsilon) {
-                        print(
-                            "⚠️ Still remaining to deduct: $remainingToDeduct");
-                      }
-
-                      await _fetchTotalPaidAcrossAllRoutes();
-                      amountSentController.clear();
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                              "Amount submitted and deducted successfully."),
-                        ),
-                      );
-                    },
-                    child: Center(
-                        child: const Text(
-                      "Submit Receipt & Amount",
-                      style: TextStyle(color: Colors.black),
-                    )),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 113, 182, 116),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
+                  const SizedBox(height: 12),                 
                 ],
               ),
             ),
