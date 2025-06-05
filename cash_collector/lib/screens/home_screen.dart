@@ -14,6 +14,7 @@ class _RoutePageState extends State<RoutePage> {
   bool isUploading = false;
   double totalPaidTodayAmount = 0;
   double totalPaidThisWeekAmount = 0;
+  double targetCollectAmount = 0.0;
 
   @override
   void initState() {
@@ -21,6 +22,18 @@ class _RoutePageState extends State<RoutePage> {
     _fetchTotalPaidAcrossAllRoutes();
     _fetchWeekCollected();
     _fetchTotalPaidToday();
+    _fetchTargetCollectAmount();
+  }
+
+  Future<void> _fetchTargetCollectAmount() async {
+    final doc =
+        await FirebaseFirestore.instance.collection('admin').doc('stats').get();
+
+    if (doc.exists && doc.data()!.containsKey('targetWeek')) {
+      setState(() {
+        targetCollectAmount = (doc['targetWeek'] ?? 0).toDouble();
+      });
+    }
   }
 
   Future<void> _fetchTotalPaidAcrossAllRoutes() async {
@@ -112,7 +125,7 @@ class _RoutePageState extends State<RoutePage> {
     setState(() {
       totalPaidThisWeekAmount = total;
     });
-     await FirebaseFirestore.instance.collection('admin').doc('summary').set({
+    await FirebaseFirestore.instance.collection('admin').doc('summary').set({
       'todayTotalPaid': total,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -139,12 +152,11 @@ class _RoutePageState extends State<RoutePage> {
 
         for (var txnDoc in transactionsSnapshot.docs) {
           final txnData = txnDoc.data();
-           final type = txnData['type'];
+          final type = txnData['type'];
           final amount = (txnData['amount'] ?? 0).toDouble();
-           if (type == null || type == 'paid' || type != 'Credit') {
+          if (type == null || type == 'paid' || type != 'Credit') {
             totalPaidToday += amount;
           }
-         
         }
       }
     }
@@ -281,6 +293,68 @@ class _RoutePageState extends State<RoutePage> {
                 ],
               ),
             ),
+            Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+  child: TweenAnimationBuilder<double>(
+    duration: const Duration(milliseconds: 800),
+    tween: Tween<double>(begin: 0, end: 1),
+    builder: (context, value, child) {
+      return Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: child,
+        ),
+      );
+    },
+    child: Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.orange[50],
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.orange.withOpacity(0.2),
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.star_rounded,
+              size: 32, color: Colors.deepOrangeAccent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Target Collect (This Week)",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Rs. ${targetCollectAmount.toStringAsFixed(2)}",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepOrange[800],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+),
+const SizedBox(height: 16),
+
           ],
         ),
       ),
