@@ -95,32 +95,23 @@ class _RoutePageState extends State<RoutePage> {
 
     double total = 0;
 
-    // Get all routes
-    final routesSnapshot =
-        await FirebaseFirestore.instance.collection('routes').get();
+   // Fetch all deductions in this week range
+  final deductionsSnapshot = await FirebaseFirestore.instance
+      .collection('deductions')
+      .where('sentAt', isGreaterThanOrEqualTo: startOfWeek)
+      .where('sentAt', isLessThanOrEqualTo: endOfWeek)
+      .get();
 
-    for (var routeDoc in routesSnapshot.docs) {
-      final shopsSnapshot = await routeDoc.reference.collection('shops').get();
-
-      for (var shopDoc in shopsSnapshot.docs) {
-        final transactionsSnapshot = await shopDoc.reference
-            .collection('transactions')
-            .where('timestamp', isGreaterThanOrEqualTo: startOfWeek)
-            .where('timestamp', isLessThanOrEqualTo: endOfWeek)
-            .get();
-
-        for (var txnDoc in transactionsSnapshot.docs) {
-          final data = txnDoc.data();
-          final type = data['type'];
-          final amount = (data['amount'] ?? 0).toDouble();
-
-          // Include if type is not 'credit' or type is missing
-          if (type == null || type == 'paid' || type != 'Credit') {
-            total += amount;
-          }
-        }
-      }
+  for (var doc in deductionsSnapshot.docs) {
+    final data = doc.data();
+    final type = data['type'];
+    final amount = (data['amount'] ?? 0).toDouble();
+// Include if type is not 'Credit'
+    if (type == null || type == 'paid' || type != 'Credit') {
+      total += amount;
     }
+  }
+
 
     setState(() {
       totalPaidThisWeekAmount = total;
@@ -278,12 +269,12 @@ class _RoutePageState extends State<RoutePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                      "Total Paid: Rs.${totalPaidAcrossRoutes.toStringAsFixed(2)}",
+                      "Balance in Hand: Rs.${totalPaidAcrossRoutes.toStringAsFixed(2)}",
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Text(
-                      "Paid Today: Rs.${totalPaidTodayAmount.toStringAsFixed(2)}",
+                      "Today Collection: Rs.${totalPaidTodayAmount.toStringAsFixed(2)}",
                       style: TextStyle(color: Colors.green[700], fontSize: 16)),
                   const SizedBox(height: 4),
                   Text(
@@ -330,7 +321,7 @@ class _RoutePageState extends State<RoutePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  "Target Collect (This Week)",
+                  "Target of This Week",
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 16,

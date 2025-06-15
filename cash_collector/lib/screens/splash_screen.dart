@@ -5,10 +5,10 @@
 import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
+import 'package:cash_collector/screens/codeEntryScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
-import 'home_screen.dart';
 
 class LaunchPage extends StatefulWidget {
   const LaunchPage({super.key});
@@ -47,7 +47,7 @@ class _LaunchPageState extends State<LaunchPage> with TickerProviderStateMixin {
 
     Timer(const Duration(seconds: 5), () {
       Navigator.of(context)
-          .pushReplacement(MaterialPageRoute(builder: (_) => const RoutePage()));
+          .pushReplacement(MaterialPageRoute(builder: (_) => AccessCodeEntryScreen()));
     });
   }
 
