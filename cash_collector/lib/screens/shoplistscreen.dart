@@ -49,7 +49,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
 
   Future<void> _loadShops() async {
     setState(() => isLoading = true);
-
     final snapshot = await FirebaseFirestore.instance
         .collection('routes')
         .doc(widget.routeName)
@@ -90,7 +89,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
         "status": status,
         "amount": (data['amount'] ?? 0) as num,
         "totalPaid": (data['totalPaid'] ?? 0) as num,
-        "paidAmount": (data['paidAmount'] ?? 0) as num, 
+        "paidAmount": (data['paidAmount'] ?? 0) as num,
         "paidAt": paidAt,
         "latitude": (data['latitude'] as num?)?.toDouble(), // 👈 Add this
         "longitude": (data['longitude'] as num?)?.toDouble(), // 👈 And this
@@ -98,8 +97,8 @@ class _ShopListScreenState extends State<ShopListScreen> {
     }
 
     setState(() {
-      allShops = updatedShops;
-      isLoading = false;
+      allShops = updatedShops; 
+      isLoading = false;     
     });
     for (var shop in allShops) {
       if (shop['status'] == 'Paid') {
@@ -393,28 +392,32 @@ class _ShopListScreenState extends State<ShopListScreen> {
                                           fontWeight: FontWeight.bold,
                                         ),
                                       )
-                                    : IconButton(
-                                        icon: const Icon(Icons.location_pin,
-                                            color: Colors.pinkAccent),
-                                        onPressed: () {
-                                          final lat = shop['latitude'];
-                                          final lng = shop['longitude'];
+                                    : CircleAvatar(
+                                        backgroundColor:
+                                            Colors.pinkAccent.withOpacity(0.45),
+                                        child: IconButton(
+                                          icon: const Icon(Icons.location_pin,
+                                              color: Colors.pinkAccent),
+                                          onPressed: () {
+                                            final lat = shop['latitude'];
+                                            final lng = shop['longitude'];
 
-                                          if (lat == null || lng == null) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              const SnackBar(
-                                                  content: Text(
-                                                      "Location not available for this shop")),
-                                            );
-                                          } else {
-                                            final googleMapsUrl = Uri.parse(
-                                                "https://www.google.com/maps/search/?api=1&query=$lat,$lng");
-                                            launchUrl(googleMapsUrl,
-                                                mode: LaunchMode
-                                                    .externalApplication);
-                                          }
-                                        },
+                                            if (lat == null || lng == null) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                    content: Text(
+                                                        "Location not available for this shop")),
+                                              );
+                                            } else {
+                                              final googleMapsUrl = Uri.parse(
+                                                  "https://www.google.com/maps/search/?api=1&query=$lat,$lng");
+                                              launchUrl(googleMapsUrl,
+                                                  mode: LaunchMode
+                                                      .externalApplication);
+                                            }
+                                          },
+                                        ),
                                       ),
                               ),
                             );
