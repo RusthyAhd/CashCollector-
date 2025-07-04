@@ -32,16 +32,20 @@ class _RoutePageState extends State<RoutePage> {
     _fetchTotalPaidToday();
     _fetchTargetCollectAmount();
   }
-
   Future<void> _launchForm() async {
-    final Uri uri = Uri.parse(googleFormUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      throw "Could not launch the Google Form";
+  final Uri uri = Uri.parse(googleFormUrl);
+  try {
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not launch the Google Form')),
+      );
     }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error: $e')),
+    );
   }
-
+}
   Future<void> _fetchTargetCollectAmount() async {
     final doc =
         await FirebaseFirestore.instance.collection('admin').doc('stats').get();
@@ -295,12 +299,12 @@ class _RoutePageState extends State<RoutePage> {
                   padding: const EdgeInsets.all(16),
                   child: IconButton(
                     icon: const Icon(Icons.inventory_2_rounded,
-                        color: Colors.deepPurple),
+                        color: Colors.teal),
                     tooltip: 'View Stock',
                     iconSize: 32,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 245, 227, 244),
-                      foregroundColor: const Color.fromARGB(255, 227, 218, 231),
+                      backgroundColor: const Color.fromARGB(255, 227, 245, 236),
+                      foregroundColor: const Color.fromARGB(255, 201, 238, 178),
                       shape: CircleBorder(),
                       padding: EdgeInsets.all(16),
                     ),
@@ -321,7 +325,7 @@ class _RoutePageState extends State<RoutePage> {
                     icon: Icon(Icons.upload_file),
                     label: Text("Upload Reciept "),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 140, 105, 235),
+                      backgroundColor:  Colors.teal.shade100,
                       foregroundColor: Colors.black,
                       padding:
                           EdgeInsets.symmetric(vertical: 14, horizontal: 20),
@@ -336,41 +340,47 @@ class _RoutePageState extends State<RoutePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Card(
-                      child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: isBalanceLoading
-                        ? const SpinKitThreeBounce(
-                            color: Colors.green,
-                            size: 24.0,
-                          )
-                        : Text(
-                            "Balance in Hand: Rs.${totalPaidAcrossRoutes.toStringAsFixed(2)}",
-                            style: const TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold)),
-                  )),
+                  Center(
+                    child: Card(
+                        child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: isBalanceLoading
+                          ? const SpinKitThreeBounce(
+                              color: Colors.green,
+                              size: 24.0,
+                            )
+                          : Text(
+                              "Balance in Hand: Rs.${totalPaidAcrossRoutes.toStringAsFixed(2)}",
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold)),
+                    )),
+                  ),
                   const SizedBox(height: 8),
                   isTodayCollectionLoading
                       ? const SpinKitThreeBounce(
                           color: Colors.green,
                           size: 20.0,
                         )
-                      : Text(
-                          "Today Collection: Rs.${totalPaidTodayAmount.toStringAsFixed(2)}",
-                          style:
-                              TextStyle(color: Colors.green[700], fontSize: 16),
-                        ),
+                      : Center(
+                        child: Text(
+                            "Today Collection: Rs.${totalPaidTodayAmount.toStringAsFixed(2)}",
+                            style:
+                                TextStyle(color: Colors.green[700], fontSize: 16),
+                          ),
+                      ),
                   const SizedBox(height: 4),
                   isWeekCollectionLoading
                       ? const SpinKitThreeBounce(
                           color: Colors.blue,
                           size: 20.0,
                         )
-                      : Text(
-                          "Paid This Week: Rs.${totalPaidThisWeekAmount.toStringAsFixed(2)}",
-                          style:
-                              TextStyle(color: Colors.blue[700], fontSize: 16),
-                        ),
+                      : Center(
+                        child: Text(
+                            "Paid This Week: Rs.${totalPaidThisWeekAmount.toStringAsFixed(2)}",
+                            style:
+                                TextStyle(color: Colors.blue[700], fontSize: 16),
+                          ),
+                      ),
                 ],
               ),
             ),
