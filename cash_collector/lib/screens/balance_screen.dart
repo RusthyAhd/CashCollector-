@@ -60,9 +60,9 @@ class _BalanceScreenState extends State<BalanceScreen> {
       print('Doc: ${doc.id} => ${doc.data()}');
     }
 
-final txList = txSnapshot.docs
-    .where((doc) => (doc.data()['type'] ?? 'Cash') != 'Credit')
-    .map((doc) {
+    final txList = txSnapshot.docs
+        .where((doc) => (doc.data()['type'] ?? 'Cash') != 'Credit')
+        .map((doc) {
       final tx = doc.data();
       return {
         'time': tx['timestamp'],
@@ -72,131 +72,276 @@ final txList = txSnapshot.docs
       };
     }).toList();
 
-
     setState(() {
       transactions = txList;
     });
   }
 
-void _showAdjustDialog() {
-  final TextEditingController controller = TextEditingController();
+  void _showAdjustDialog() {
+    final TextEditingController controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text("Adjust Balance"),
+              content: TextField(
+                controller: controller,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  hintText: "Enter amount to reduce",
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    "Cancel",
+                    style: TextStyle(color: Colors.black),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: _isProcessing
+                      ? null
+                      : () async {
+                          final input = controller.text;
+                          final double? reduction = double.tryParse(input);
+
+                          if (reduction != null &&
+                              reduction > 0 &&
+                              reduction <= (balanceAmount ?? 0)) {
+                            setStateDialog(() {
+                              _isProcessing = true;
+                            });
+
+                            final newBalance = (balanceAmount ?? 0) - reduction;
+
+                            try {
+                              final shopDoc = FirebaseFirestore.instance
+                                  .collection('routes')
+                                  .doc(widget.routeName)
+                                  .collection('shops')
+                                  .doc(widget.shopId);
+
+                              await shopDoc.update({
+                                'amount': newBalance,
+                                'status': newBalance == 0 ? 'Unpaid' : 'Paid',
+                              });
+
+                              await shopDoc.collection('transactions').add({
+                                'amount': reduction,
+                                'timestamp': FieldValue.serverTimestamp(),
+                              });
+
+                              setState(() {
+                                balanceAmount = newBalance;
+                              });
+
+                              widget.onBalanceAdjusted(
+                                  widget.shopName, reduction);
+
+                              Navigator.pop(context); // Close dialog
+
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  content: Text(
+                                      "Successfully reduced LKR ${reduction.toStringAsFixed(2)} from balance."),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                      },
+                                      child: const Text(
+                                        "OK",
+                                        style: TextStyle(color: Colors.black),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            } catch (e) {
+                              setStateDialog(() {
+                                _isProcessing = false;
+                              });
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content:
+                                        Text("Error reducing balance: $e")),
+                              );
+                            }
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text("Invalid amount entered")),
+                            );
+                          }
+                        },
+                  child: _isProcessing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          "Enter",
+                          style: TextStyle(color: Colors.black),
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+void _showFeedbackDialog() {
+  final TextEditingController noteController = TextEditingController();
+  String selectedReason = '';
+
+  final List<Map<String, String>> reasons = [
+    {'emoji': '🚪', 'label': 'Shop was closed'},
+    {'emoji': '👤', 'label': 'Shop owner not available'},
+    {'emoji': '📉', 'label': 'No business today'},
+    {'emoji': '🙅‍♂️', 'label': 'Owner refused to pay'},
+    {'emoji': '📝', 'label': 'Other'},
+  ];
 
   showDialog(
     context: context,
     builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setStateDialog) {
-          return AlertDialog(
-            title: const Text("Adjust Balance"),
-            content: TextField(
-              controller: controller,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                hintText: "Enter amount to reduce",
+      return AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: const Color(0xFFFDF8F4),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            SizedBox(width: 10),
+            Text(
+              "Feedback Area",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 6),
+              ...reasons.map((reason) {
+                final isSelected = selectedReason == reason['label'];
+                return ListTile(
+                  onTap: () {
+                    selectedReason = reason['label']!;
+                    (context as Element).markNeedsBuild(); // Rebuild dialog
+                  },
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  tileColor:
+                      isSelected ? Colors.orange.shade100 : Colors.grey[200],
+                  leading: Text(reason['emoji']!, style: const TextStyle(fontSize: 20)),
+                  title: Text(reason['label']!,
+                      style: const TextStyle(fontWeight: FontWeight.w500)),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle, color: Colors.green)
+                      : null,
+                );
+              }),
+              const SizedBox(height: 16),
+              const Text("Optional note"),
+              const SizedBox(height: 6),
+              TextField(
+                controller: noteController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: "Eg: Shop was closed due to festival",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: const [
+                    Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Daily shop visits are required. You're responsible for reporting skipped collections.",
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            ],
+          ),
+        ),
+        actionsPadding: const EdgeInsets.only(right: 16, bottom: 12),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.send, size: 18),
+            label: const Text("Submit"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade700,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel",
-                    style: TextStyle(color: Colors.black),),
-              ),
-              ElevatedButton(
-                onPressed: _isProcessing
-                    ? null
-                    : () async {
-                        final input = controller.text;
-                        final double? reduction = double.tryParse(input);
+            onPressed: () async {
+              if (selectedReason.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Please select a reason.")),
+                );
+                return;
+              }
 
-                        if (reduction != null &&
-                            reduction > 0 &&
-                            reduction <= (balanceAmount ?? 0)) {
-                          setStateDialog(() {
-                            _isProcessing = true;
-                          });
+              final note = noteController.text.trim();
 
-                          final newBalance =
-                              (balanceAmount ?? 0) - reduction;
+              await FirebaseFirestore.instance
+                  .collection('routes')
+                  .doc(widget.routeName)
+                  .collection('shops')
+                  .doc(widget.shopId)
+                  .collection('feedbacks')
+                  .add({
+                'reason': selectedReason,
+                'note': note,
+                'submittedAt': FieldValue.serverTimestamp(),
+              });
 
-                          try {
-                            final shopDoc = FirebaseFirestore.instance
-                                .collection('routes')
-                                .doc(widget.routeName)
-                                .collection('shops')
-                                .doc(widget.shopId);
+              Navigator.pop(context);
 
-                            await shopDoc.update({
-                              'amount': newBalance,
-                              'status': newBalance == 0
-                                  ? 'Unpaid'
-                                  : 'Paid',
-                            });
-
-                            await shopDoc
-                                .collection('transactions')
-                                .add({
-                              'amount': reduction,
-                              'timestamp': FieldValue.serverTimestamp(),
-                            });
-
-                            setState(() {
-                              balanceAmount = newBalance;
-                            });
-
-                            widget.onBalanceAdjusted(
-                                widget.shopName, reduction);
-
-                            Navigator.pop(context); // Close dialog
-
-                            showDialog(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                content: Text(
-                                    "Successfully reduced LKR ${reduction.toStringAsFixed(2)} from balance."),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () {
-                                      Navigator.pop(context);
-                                    },
-                                    child: const Text("OK", style: TextStyle(color: Colors.black),),
-                                  ),
-                                ],
-                              ),
-                            );
-                          } catch (e) {
-                            setStateDialog(() {
-                              _isProcessing = false;
-                            });
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content: Text(
-                                      "Error reducing balance: $e")),
-                            );
-                          }
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content:
-                                    Text("Invalid amount entered")),
-                          );
-                        }
-                      },
-                child: _isProcessing
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text("Enter", style: TextStyle(color: Colors.black),),
-              ),
-            ],
-          );
-        },
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Feedback submitted.")),
+              );
+            },
+          ),
+        ],
       );
     },
   );
@@ -212,11 +357,13 @@ void _showAdjustDialog() {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AppBar(
-              title: Text(widget.shopName),
-              leading: const BackButton(),
-              elevation: 0,
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
+              title: Text("Balance - ${widget.shopName}"),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.feedback_outlined),
+                  onPressed: _showFeedbackDialog,
+                ),
+              ],
             ),
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 20),

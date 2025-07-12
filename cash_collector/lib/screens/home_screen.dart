@@ -1,8 +1,10 @@
+import 'package:cash_collector/screens/shoplistscreen.dart';
 import 'package:cash_collector/screens/stocklist.dart';
+import 'package:cash_collector/screens/termsandconditions.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'shoplistscreen.dart';
+
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 
 class RoutePage extends StatefulWidget {
@@ -32,20 +34,22 @@ class _RoutePageState extends State<RoutePage> {
     _fetchTotalPaidToday();
     _fetchTargetCollectAmount();
   }
+
   Future<void> _launchForm() async {
-  final Uri uri = Uri.parse(googleFormUrl);
-  try {
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    final Uri uri = Uri.parse(googleFormUrl);
+    try {
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not launch the Google Form')),
+        );
+      }
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not launch the Google Form')),
+        SnackBar(content: Text('Error: $e')),
       );
     }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error: $e')),
-    );
   }
-}
+
   Future<void> _fetchTargetCollectAmount() async {
     final doc =
         await FirebaseFirestore.instance.collection('admin').doc('stats').get();
@@ -200,23 +204,38 @@ class _RoutePageState extends State<RoutePage> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.green.shade800,
         elevation: 1,
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () async {
+                setState(() {
+                  isUploading = true;
+                  isTodayCollectionLoading = true;
+                  isWeekCollectionLoading = true;
+                });
+                await _fetchTotalPaidAcrossAllRoutes();
+                setState(() {
+                  isUploading = false;
+                  isTodayCollectionLoading = false;
+                  isWeekCollectionLoading = false;
+                });
+              },
+            )
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () async {
-              setState(() {
-                isUploading = true;
-                isTodayCollectionLoading = true;
-                isWeekCollectionLoading = true;
-              });
-              await _fetchTotalPaidAcrossAllRoutes();
-              setState(() {
-                isUploading = false;
-                isTodayCollectionLoading = false;
-                isWeekCollectionLoading = false;
-              });
+            icon: const Icon(Icons.question_mark_outlined),
+            tooltip: "Terms & Conditions",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => TermsAndConditionsPage()),
+              );
             },
-          )
+          ),
         ],
       ),
       body: RefreshIndicator(
@@ -325,7 +344,7 @@ class _RoutePageState extends State<RoutePage> {
                     icon: Icon(Icons.upload_file),
                     label: Text("Upload Reciept "),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor:  Colors.teal.shade100,
+                      backgroundColor: Colors.teal.shade100,
                       foregroundColor: Colors.black,
                       padding:
                           EdgeInsets.symmetric(vertical: 14, horizontal: 20),
@@ -362,12 +381,12 @@ class _RoutePageState extends State<RoutePage> {
                           size: 20.0,
                         )
                       : Center(
-                        child: Text(
+                          child: Text(
                             "Today Collection: Rs.${totalPaidTodayAmount.toStringAsFixed(2)}",
-                            style:
-                                TextStyle(color: Colors.green[700], fontSize: 16),
+                            style: TextStyle(
+                                color: Colors.green[700], fontSize: 16),
                           ),
-                      ),
+                        ),
                   const SizedBox(height: 4),
                   isWeekCollectionLoading
                       ? const SpinKitThreeBounce(
@@ -375,12 +394,12 @@ class _RoutePageState extends State<RoutePage> {
                           size: 20.0,
                         )
                       : Center(
-                        child: Text(
+                          child: Text(
                             "Paid This Week: Rs.${totalPaidThisWeekAmount.toStringAsFixed(2)}",
-                            style:
-                                TextStyle(color: Colors.blue[700], fontSize: 16),
+                            style: TextStyle(
+                                color: Colors.blue[700], fontSize: 16),
                           ),
-                      ),
+                        ),
                 ],
               ),
             ),
