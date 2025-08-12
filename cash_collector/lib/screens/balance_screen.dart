@@ -331,6 +331,8 @@ void _showFeedbackDialog() {
                   .add({
                 'reason': selectedReason,
                 'note': note,
+                'shopName': widget.shopName,   // Added
+                'routeName': widget.routeName, // Added
                 'submittedAt': FieldValue.serverTimestamp(),
               });
 
@@ -346,7 +348,6 @@ void _showFeedbackDialog() {
     },
   );
 }
-
 
   @override
   Widget build(BuildContext context) {
