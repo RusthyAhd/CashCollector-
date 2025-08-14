@@ -202,152 +202,133 @@ class _BalanceScreenState extends State<BalanceScreen> {
       },
     );
   }
-void _showFeedbackDialog() {
-  final TextEditingController noteController = TextEditingController();
-  String selectedReason = '';
 
-  final List<Map<String, String>> reasons = [
-    {'emoji': '🚪', 'label': 'Shop was closed'},
-    {'emoji': '👤', 'label': 'Shop owner not available'},
-    {'emoji': '📉', 'label': 'No business today'},
-    {'emoji': '🙅‍♂️', 'label': 'Owner refused to pay'},
-    {'emoji': '📝', 'label': 'Other'},
-  ];
+  void _showFeedbackDialog() {
+    String? selectedReason;
+    String note = '';
 
-  showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: const Color(0xFFFDF8F4),
-        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-        title: Row(
-          children: const [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-            SizedBox(width: 10),
-            Text(
-              "Feedback Area",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 6),
-              ...reasons.map((reason) {
-                final isSelected = selectedReason == reason['label'];
-                return ListTile(
-                  onTap: () {
-                    selectedReason = reason['label']!;
-                    (context as Element).markNeedsBuild(); // Rebuild dialog
-                  },
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              backgroundColor: const Color(0xFFFDF8F4),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              title: Row(
+                children: const [
+                  Icon(Icons.warning_amber_rounded,
+                      color: Colors.orange, size: 28),
+                  SizedBox(width: 10),
+                  Text(
+                    "Feedback Area",
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  tileColor:
-                      isSelected ? Colors.orange.shade100 : Colors.grey[200],
-                  leading: Text(reason['emoji']!, style: const TextStyle(fontSize: 20)),
-                  title: Text(reason['label']!,
-                      style: const TextStyle(fontWeight: FontWeight.w500)),
-                  trailing: isSelected
-                      ? const Icon(Icons.check_circle, color: Colors.green)
-                      : null,
-                );
-              }),
-              const SizedBox(height: 16),
-              const Text("Optional note"),
-              const SizedBox(height: 6),
-              TextField(
-                controller: noteController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  hintText: "Eg: Shop was closed due to festival",
-                  border: OutlineInputBorder(),
-                ),
+                ],
               ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: const [
-                    Icon(Icons.info_outline, color: Colors.orange, size: 20),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "Daily shop visits are required. You're responsible for reporting skipped collections.",
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          color: Colors.orange,
-                          fontWeight: FontWeight.w500,
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Reason',
+                      border: OutlineInputBorder(),
+                    ),
+                    value: selectedReason,
+                    items: [
+                      'Shop Closed 🏪',
+                      'Owner Not Available 🙅‍♂️',
+                      'No business today 📉',
+                      'Owner refused to pay 💰',
+                      'Other ✏️'
+                    ]
+                        .map((reason) => DropdownMenuItem(
+                              value: reason,
+                              child: Text(reason),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedReason = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    decoration: const InputDecoration(
+                      labelText: 'Note (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                    onChanged: (value) => note = value,
+                  ),
+                  Row(
+                    children: const [
+                      Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Daily shop visits are required. You're responsible for reporting skipped collections.",
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            color: Colors.orange,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              )
-            ],
-          ),
-        ),
-        actionsPadding: const EdgeInsets.only(right: 16, bottom: 12),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.send, size: 18),
-            label: const Text("Submit"),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green.shade700,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                    ],
+                  ),
+                ],
               ),
-            ),
-            onPressed: () async {
-              if (selectedReason.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Please select a reason.")),
-                );
-                return;
-              }
+              actions: [
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                ElevatedButton(
+                  child: const Text('Submit'),
+                  onPressed: () async {
+                    if (selectedReason == null || selectedReason!.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please select a reason'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
 
-              final note = noteController.text.trim();
+                    await FirebaseFirestore.instance
+                        .collection('feedbacks')
+                        .add({
+                      'routeName':
+                          widget.routeName, // Ensure you pass this to page
+                      'shopName':
+                          widget.shopName, // Ensure you pass this to page
+                      'shopId': widget.shopId,
+                      'reason': selectedReason,
+                      'note': note,
+                      'submittedAt': FieldValue.serverTimestamp(),
+                    });
 
-              await FirebaseFirestore.instance
-                  .collection('routes')
-                  .doc(widget.routeName)
-                  .collection('shops')
-                  .doc(widget.shopId)
-                  .collection('feedbacks')
-                  .add({
-                'reason': selectedReason,
-                'note': note,
-                'shopName': widget.shopName,   // Added
-                'routeName': widget.routeName, // Added
-                'submittedAt': FieldValue.serverTimestamp(),
-              });
-
-              Navigator.pop(context);
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Feedback submitted.")),
-              );
-            },
-          ),
-        ],
-      );
-    },
-  );
-}
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Feedback submitted successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
