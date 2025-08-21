@@ -2,7 +2,7 @@
 
 
 
-**Pegas Flow** is a professional-grade mobile application for field data entry, syncing with Google Sheets and Supabase in real time. Whether you're managing inspections, collecting reports, or organizing field staff data, Pegas Flow empowers both users and admins with seamless communication and automated syncing.
+**Pegas Flex** is a professional-grade mobile application for field data entry, syncing with Google Sheets and Supabase in real time. Whether you're managing inspections, collecting reports, or organizing field staff data, Pegas Flow empowers both users and admins with seamless communication and automated syncing.
 
 ---
 
@@ -33,5 +33,6 @@
 
 | 📱 Mobile Field App | 🖥️ Admin Dashboard |
 |---------------------|-------------------|
+
 
 
