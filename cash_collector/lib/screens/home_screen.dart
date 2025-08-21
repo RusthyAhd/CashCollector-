@@ -30,7 +30,7 @@ class _RoutePageState extends State<RoutePage> {
   void initState() {
     super.initState();
     _fetchTotalPaidAcrossAllRoutes();
-    _fetchWeekCollected();
+    _fetchWeekPaid();
     _fetchTotalPaidToday();
     _fetchTargetCollectAmount();
   }
@@ -93,7 +93,7 @@ class _RoutePageState extends State<RoutePage> {
     });
   }
 
-  Future<void> _fetchWeekCollected() async {
+  Future<void> _fetchWeekPaid() async {
     setState(() => isWeekCollectionLoading = true);
     final now = DateTime.now();
 
@@ -145,7 +145,7 @@ class _RoutePageState extends State<RoutePage> {
       isWeekCollectionLoading = false;
     });
     await FirebaseFirestore.instance.collection('admin').doc('summary').set({
-      'todayTotalPaid': total,
+      'weekPaid': total,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -174,6 +174,7 @@ class _RoutePageState extends State<RoutePage> {
           final txnData = txnDoc.data();
           final type = txnData['type'];
           final amount = (txnData['amount'] ?? 0).toDouble();
+
           if (type == null || type == 'paid' || type != 'Credit') {
             totalPaidToday += amount;
           }
@@ -181,18 +182,33 @@ class _RoutePageState extends State<RoutePage> {
       }
     }
 
-    // Optional: Update local state
+    // ✅ Update local state
     setState(() {
       totalPaidTodayAmount = totalPaidToday;
       isTodayCollectionLoading = false;
     });
 
-    // Optional: Save to Firestore summary
-    await FirebaseFirestore.instance.collection('admin').doc('summary').set({
+    final summaryRef =
+        FirebaseFirestore.instance.collection('admin').doc('summary');
+
+    // ✅ Save to summary (latest value)
+    await summaryRef.set({
       'todayTotalPaid': totalPaidToday,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+
+    // ✅ Save as history (daily record)
+    final dateKey =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    await summaryRef.collection('todayCollectionHistory').doc(dateKey).set({
+      'date': dateKey,
+      'amount': totalPaidToday,
+      'timestamp': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +232,7 @@ class _RoutePageState extends State<RoutePage> {
                   isWeekCollectionLoading = true;
                 });
                 await _fetchTotalPaidAcrossAllRoutes();
+                await _fetchTotalPaidToday();
                 setState(() {
                   isUploading = false;
                   isTodayCollectionLoading = false;
@@ -239,7 +256,10 @@ class _RoutePageState extends State<RoutePage> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _fetchTotalPaidAcrossAllRoutes,
+        onRefresh: () async {
+          await _fetchTotalPaidAcrossAllRoutes();
+          await _fetchTotalPaidToday();
+        },
         child: Column(
           children: [
             Expanded(
