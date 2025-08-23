@@ -29,10 +29,72 @@ class _RoutePageState extends State<RoutePage> {
   @override
   void initState() {
     super.initState();
+    saveDailyPaidShopsBreakdown();
+    getLatestPaidShopsCount();
     _fetchTotalPaidAcrossAllRoutes();
-    _fetchWeekCollected();
+    _fetchWeekPaid();
     _fetchTotalPaidToday();
     _fetchTargetCollectAmount();
+  }
+
+
+
+  Future<void> saveDailyPaidShopsBreakdown() async {
+    final txSnapshot = await FirebaseFirestore.instance
+        .collectionGroup('transactions')
+        .where('timestamp', isNotEqualTo: null)
+        .get();
+
+    // Map<date, Set<shopIds>>
+    Map<String, Set<String>> dailyShopTracker = {};
+
+    for (var doc in txSnapshot.docs) {
+      final data = doc.data();
+      if (data['timestamp'] == null) continue;
+
+      final ts = data['timestamp'] as Timestamp;
+      final dateKey =
+          "${ts.toDate().year}-${ts.toDate().month.toString().padLeft(2, '0')}-${ts.toDate().day.toString().padLeft(2, '0')}";
+
+      // shopId is the parent doc of "transactions"
+      final shopId = doc.reference.parent.parent!.id;
+
+      dailyShopTracker.putIfAbsent(dateKey, () => {});
+      dailyShopTracker[dateKey]!.add(shopId);
+    }
+
+    // Save each date’s count into Firestore
+    final historyRef = FirebaseFirestore.instance
+        .collection('admin')
+        .doc('summary')
+        .collection('dailyPaidShops');
+
+    for (var entry in dailyShopTracker.entries) {
+      await historyRef.doc(entry.key).set({
+        'date': entry.key,
+        'paidShopsCount': entry.value.length,
+        'shopIds': entry.value.toList(), // optional: keep shop list
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+  }
+
+  Future<int> getLatestPaidShopsCount() async {
+    final now = DateTime.now();
+    final todayKey =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    final doc = await FirebaseFirestore.instance
+        .collection('admin')
+        .doc('summary')
+        .collection('dailyPaidShops')
+        .doc(todayKey)
+        .get();
+
+    if (doc.exists && doc.data() != null) {
+      return doc.data()!['paidShopsCount'] ?? 0;
+    }
+    return 0;
   }
 
   Future<void> _launchForm() async {
@@ -93,7 +155,7 @@ class _RoutePageState extends State<RoutePage> {
     });
   }
 
-  Future<void> _fetchWeekCollected() async {
+  Future<void> _fetchWeekPaid() async {
     setState(() => isWeekCollectionLoading = true);
     final now = DateTime.now();
 
@@ -145,7 +207,7 @@ class _RoutePageState extends State<RoutePage> {
       isWeekCollectionLoading = false;
     });
     await FirebaseFirestore.instance.collection('admin').doc('summary').set({
-      'todayTotalPaid': total,
+      'weekPaid': total,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -174,6 +236,7 @@ class _RoutePageState extends State<RoutePage> {
           final txnData = txnDoc.data();
           final type = txnData['type'];
           final amount = (txnData['amount'] ?? 0).toDouble();
+
           if (type == null || type == 'paid' || type != 'Credit') {
             totalPaidToday += amount;
           }
@@ -181,16 +244,29 @@ class _RoutePageState extends State<RoutePage> {
       }
     }
 
-    // Optional: Update local state
+    // ✅ Update local state
     setState(() {
       totalPaidTodayAmount = totalPaidToday;
       isTodayCollectionLoading = false;
     });
 
-    // Optional: Save to Firestore summary
-    await FirebaseFirestore.instance.collection('admin').doc('summary').set({
+    final summaryRef =
+        FirebaseFirestore.instance.collection('admin').doc('summary');
+
+    // ✅ Save to summary (latest value)
+    await summaryRef.set({
       'todayTotalPaid': totalPaidToday,
       'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    // ✅ Save as history (daily record)
+    final dateKey =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    await summaryRef.collection('todayCollectionHistory').doc(dateKey).set({
+      'date': dateKey,
+      'amount': totalPaidToday,
+      'timestamp': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
@@ -209,17 +285,21 @@ class _RoutePageState extends State<RoutePage> {
           children: [
             IconButton(
               icon: const Icon(Icons.refresh),
+
               onPressed: () async {
                 setState(() {
                   isUploading = true;
                   isTodayCollectionLoading = true;
                   isWeekCollectionLoading = true;
+                  
                 });
                 await _fetchTotalPaidAcrossAllRoutes();
+                await _fetchTotalPaidToday();
                 setState(() {
                   isUploading = false;
                   isTodayCollectionLoading = false;
                   isWeekCollectionLoading = false;
+                  
                 });
               },
             )
@@ -239,7 +319,10 @@ class _RoutePageState extends State<RoutePage> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _fetchTotalPaidAcrossAllRoutes,
+        onRefresh: () async {
+          await _fetchTotalPaidAcrossAllRoutes();
+          await _fetchTotalPaidToday();
+        },
         child: Column(
           children: [
             Expanded(
@@ -315,7 +398,7 @@ class _RoutePageState extends State<RoutePage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(10),
                   child: IconButton(
                     icon: const Icon(Icons.inventory_2_rounded,
                         color: Colors.teal),
@@ -355,7 +438,7 @@ class _RoutePageState extends State<RoutePage> {
             ),
             const Divider(),
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(5),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -402,6 +485,11 @@ class _RoutePageState extends State<RoutePage> {
                         ),
                 ],
               ),
+            ),
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10),
+              child: paidShopsSummaryCard(),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -463,10 +551,116 @@ class _RoutePageState extends State<RoutePage> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
+}
+
+Widget paidShopsSummaryCard() {
+  
+  final now = DateTime.now();
+
+  // Today's key
+  final todayKey =
+      "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+  final todayDocRef = FirebaseFirestore.instance
+      .collection('admin')
+      .doc('summary')
+      .collection('dailyPaidShops')
+      .doc(todayKey);
+
+  // Month range query
+  final firstDayOfMonth = DateTime(now.year, now.month, 1);
+  final monthCollectionRef = FirebaseFirestore.instance
+      .collection('admin')
+      .doc('summary')
+      .collection('dailyPaidShops')
+      .where('date',
+          isGreaterThanOrEqualTo:
+              "${firstDayOfMonth.year}-${firstDayOfMonth.month.toString().padLeft(2, '0')}-01");
+
+  return Row(
+    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    children: [
+      // Today Paid Shops Card
+      Expanded(
+        child: StreamBuilder<DocumentSnapshot>(
+          stream: todayDocRef.snapshots(),
+          builder: (context, snapshot) {
+            int todayCount = 0;
+            if (snapshot.hasData && snapshot.data!.exists) {
+              final data = snapshot.data!.data() as Map<String, dynamic>;
+              todayCount = data['paidShopsCount'] ?? 0;
+            }
+
+            return Card(
+              color: Colors.green[50],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 6.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      "Today's Paid",
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    Text(
+                      "$todayCount",
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      const SizedBox(width: 8),
+
+      // Month Paid Shops Card
+      Expanded(
+        child: StreamBuilder<QuerySnapshot>(
+          stream: monthCollectionRef.snapshots(),
+          builder: (context, snapshot) {
+            int monthTotal = 0;
+            if (snapshot.hasData) {
+              for (var doc in snapshot.data!.docs) {
+                final data = doc.data() as Map<String, dynamic>;
+                monthTotal += (data['paidShopsCount'] ?? 0) as int;
+              }
+            }
+
+            return Card(
+              color: Colors.blue[50],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 6.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      "Month's Paid",
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    Text(
+                      "$monthTotal",
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ],
+  );
 }
