@@ -1,3 +1,4 @@
+import 'package:cash_collector/screens/addReceipts.dart';
 import 'package:cash_collector/screens/shoplistscreen.dart';
 import 'package:cash_collector/screens/stocklist.dart';
 import 'package:cash_collector/screens/termsandconditions.dart';
@@ -35,9 +36,56 @@ class _RoutePageState extends State<RoutePage> {
     _fetchWeekPaid();
     _fetchTotalPaidToday();
     _fetchTargetCollectAmount();
-  }
+     }
 
+  // Future<void> copyAndRenameShop({
+  //   required String fromRoute,
+  //   required String fromShopId,
+  //   required String toRoute,
+  //   required String newShopId,
+  // }) async {
+  //   final firestore = FirebaseFirestore.instance;
 
+  //   // Old shop reference
+  //   final oldShopRef = firestore
+  //       .collection('routes')
+  //       .doc(fromRoute)
+  //       .collection('shops')
+  //       .doc(fromShopId);
+
+  //   // New shop reference (renamed + moved)
+  //   final newShopRef = firestore
+  //       .collection('routes')
+  //       .doc(toRoute)
+  //       .collection('shops')
+  //       .doc(newShopId);
+
+  //   // Get old shop data
+  //   final oldSnapshot = await oldShopRef.get();
+  //   if (!oldSnapshot.exists) {
+  //     print("❌ Shop $fromShopId not found in $fromRoute.");
+  //     return;
+  //   }
+
+  //   // Create new doc with same data
+  //   await newShopRef.set(oldSnapshot.data()!);
+
+  //   // Copy subcollections
+  //   await _copySubcollection(oldShopRef, newShopRef, 'cashAdditions');
+  //   await _copySubcollection(oldShopRef, newShopRef, 'feedbacks');
+  //   await _copySubcollection(oldShopRef, newShopRef, 'transactions');
+
+  //   print("✅ Shop copied as $newShopId into $toRoute.");
+  // }
+
+  // Future<void> _copySubcollection(DocumentReference sourceDoc,
+  //     DocumentReference targetDoc, String subName) async {
+  //   final subSnap = await sourceDoc.collection(subName).get();
+  //   for (var doc in subSnap.docs) {
+  //     final newDocRef = targetDoc.collection(subName).doc(doc.id);
+  //     await newDocRef.set(doc.data());
+  //   }
+  // }
 
   Future<void> saveDailyPaidShopsBreakdown() async {
     final txSnapshot = await FirebaseFirestore.instance
@@ -51,6 +99,9 @@ class _RoutePageState extends State<RoutePage> {
     for (var doc in txSnapshot.docs) {
       final data = doc.data();
       if (data['timestamp'] == null) continue;
+
+      // ✅ Skip "credit" transactions
+      if (data['type'] == 'Credit') continue;
 
       final ts = data['timestamp'] as Timestamp;
       final dateKey =
@@ -285,13 +336,11 @@ class _RoutePageState extends State<RoutePage> {
           children: [
             IconButton(
               icon: const Icon(Icons.refresh),
-
               onPressed: () async {
                 setState(() {
                   isUploading = true;
                   isTodayCollectionLoading = true;
                   isWeekCollectionLoading = true;
-                  
                 });
                 await _fetchTotalPaidAcrossAllRoutes();
                 await _fetchTotalPaidToday();
@@ -299,7 +348,6 @@ class _RoutePageState extends State<RoutePage> {
                   isUploading = false;
                   isTodayCollectionLoading = false;
                   isWeekCollectionLoading = false;
-                  
                 });
               },
             )
@@ -423,7 +471,14 @@ class _RoutePageState extends State<RoutePage> {
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: ElevatedButton.icon(
-                    onPressed: _launchForm,
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AddReceipts(),
+                        ),
+                      );
+                    },
                     icon: Icon(Icons.upload_file),
                     label: Text("Upload Reciept "),
                     style: ElevatedButton.styleFrom(
@@ -560,7 +615,6 @@ class _RoutePageState extends State<RoutePage> {
 }
 
 Widget paidShopsSummaryCard() {
-  
   final now = DateTime.now();
 
   // Today's key
@@ -599,7 +653,8 @@ Widget paidShopsSummaryCard() {
             return Card(
               color: Colors.green[50],
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 6.0),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 8.0, horizontal: 6.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -639,7 +694,8 @@ Widget paidShopsSummaryCard() {
             return Card(
               color: Colors.blue[50],
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 6.0),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 8.0, horizontal: 6.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
