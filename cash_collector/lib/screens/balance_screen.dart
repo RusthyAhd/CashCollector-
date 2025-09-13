@@ -195,8 +195,7 @@ class _BalanceScreenState extends State<BalanceScreen> {
       },
     );
   }
-
-  /// Receipt dialog
+/// Receipt dialog
 void _showReceiptDialog({
   required String shopName,
   required double oldBalance,
@@ -214,19 +213,13 @@ void _showReceiptDialog({
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text("Shop: $shopName", style: const TextStyle(fontWeight: FontWeight.bold)),
-            SizedBox(height: 15),
+            const SizedBox(height: 15),
             Text("Old Balance: LKR ${oldBalance.toStringAsFixed(2)}"),
-             SizedBox(height: 12),
+            const SizedBox(height: 12),
             Text("Deducted: LKR ${reducedAmount.toStringAsFixed(2)}"),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             Text("New Balance: LKR ${newBalance.toStringAsFixed(2)}",
                 style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            const Divider(),
-            const Text(
-              "Thank you for your business!",
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
           ],
         ),
         actions: [
@@ -247,43 +240,57 @@ void _showReceiptDialog({
                 return;
               }
 
-              // 2️⃣ Build receipt widget
+              // 2️⃣ Show preview dialog with Exit + Print
               await showDialog(
                 context: context,
+                barrierDismissible: false, // prevent closing by tapping outside
                 builder: (context) {
-                  return Receipt(
-                    builder: (context) => Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text("Pegas Flex\nKinniya 02\n0755354023"),
-                        const Divider(),
-                        Text("Shop: $shopName"),
-                        const SizedBox(height: 10),
-                        Text("Old Balance: LKR ${oldBalance.toStringAsFixed(2)}"),
-                        const SizedBox(height: 8),
-                        Text("Deducted: LKR ${reducedAmount.toStringAsFixed(2)}"),
-                        const SizedBox(height: 8),
-                        Text("New Balance: LKR ${newBalance.toStringAsFixed(2)}"),
-                        const Divider(),
-                        const Text("Thank you for your business!"),
-                      ],
+                  return AlertDialog(
+                    title: const Text("Receipt Preview"),
+                    content: Receipt(
+                      builder: (context) => Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("Pegas Flex\nKinniya 02\n0755354023"),
+                          const Divider(),
+                          Text("Shop: $shopName"),
+                          const SizedBox(height: 10),
+                          Text("Old Balance: LKR ${oldBalance.toStringAsFixed(2)}"),
+                          const SizedBox(height: 8),
+                          Text("Deducted: LKR ${reducedAmount.toStringAsFixed(2)}"),
+                          const SizedBox(height: 8),
+                          Text("New Balance: LKR ${newBalance.toStringAsFixed(2)}"),
+                        ],
+                      ),
+                      onInitialized: (controller) {
+                        _receiptController = controller;
+                      },
                     ),
-                    onInitialized: (controller) {
-                      _receiptController = controller;
-                    },
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop(); // Exit preview without printing
+                        },
+                        child: const Text("Exit", style: TextStyle(color: Colors.black)),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (_receiptController != null) {
+                            await _receiptController!.print(address: device.address);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Receipt sent to printer")),
+                            );
+                          }
+                          Navigator.of(context).pop(); // Close preview
+                        },
+                        child: const Text("Ok", style: TextStyle(color: Colors.black)),
+                      ),
+                    ],
                   );
                 },
               );
 
-              // 3️⃣ Print receipt
-              if (_receiptController != null) {
-                await _receiptController!.print(address: device.address);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Receipt sent to printer")),
-                );
-              }
-
-              Navigator.pop(context); // Close original dialog
+              Navigator.pop(context); // Close the first dialog
             },
           ),
         ],
@@ -291,6 +298,7 @@ void _showReceiptDialog({
     },
   );
 }
+
   void _showFeedbackDialog() {
     String? selectedReason;
     String note = '';
