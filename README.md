@@ -22,7 +22,7 @@
 | Technology        | Role                                      |
 |-------------------|-------------------------------------------|
 | **Flutter**        | Cross-platform mobile app framework       |
-| **Supabase**       | Backend: Auth, Database, Realtime         |
+| **Firebase**       | Backend: Auth, Database, Realtime         |
 | **Google Sheets API** | External spreadsheet sync                 |
 | **Dart**           | Programming language                      |
 | **REST API**       | Data exchange with admin infrastructure   |
@@ -33,6 +33,7 @@
 
 | 📱 Mobile Field App | 🖥️ Admin Dashboard |
 |---------------------|-------------------|
+
 
 
 
