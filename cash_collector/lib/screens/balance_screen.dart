@@ -114,7 +114,7 @@ class _BalanceScreenState extends State<BalanceScreen> {
                           final double? reduction = double.tryParse(input);
 
                           if (reduction != null &&
-                              reduction > 0 &&
+                              reduction > 300 &&
                               reduction <= (balanceAmount ?? 0)) {
                             setStateDialog(() {
                               _isProcessing = true;
@@ -170,7 +170,7 @@ class _BalanceScreenState extends State<BalanceScreen> {
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                  content: Text("Invalid amount entered")),
+                                  content: Text("Invalid amount entered\nAmount must be at least 300")),
                             );
                           }
                         },
