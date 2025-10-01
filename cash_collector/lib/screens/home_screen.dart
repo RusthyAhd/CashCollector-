@@ -1,4 +1,5 @@
 import 'package:cash_collector/screens/addReceipts.dart';
+import 'package:cash_collector/screens/add_order_screen.dart';
 import 'package:cash_collector/screens/shoplistscreen.dart';
 import 'package:cash_collector/screens/stocklist.dart';
 import 'package:cash_collector/screens/termsandconditions.dart';
@@ -16,8 +17,8 @@ class RoutePage extends StatefulWidget {
 }
 
 class _RoutePageState extends State<RoutePage> {
-  final String googleFormUrl =
-      "https://docs.google.com/forms/d/e/1FAIpQLSfZOSjqEHGOQuRZeCr6XF7JWrqLbFronAMdiHJ28d853Nau8g/viewform?usp=header";
+ // final String googleFormUrl =
+   //   "https://docs.google.com/forms/d/e/1FAIpQLSfZOSjqEHGOQuRZeCr6XF7JWrqLbFronAMdiHJ28d853Nau8g/viewform?usp=header";
   bool isBalanceLoading = true;
   bool isTodayCollectionLoading = true;
   bool isWeekCollectionLoading = true;
@@ -36,7 +37,7 @@ class _RoutePageState extends State<RoutePage> {
     _fetchWeekPaid();
     _fetchTotalPaidToday();
     _fetchTargetCollectAmount();
-     }
+  }
 
   // Future<void> copyAndRenameShop({
   //   required String fromRoute,
@@ -148,20 +149,20 @@ class _RoutePageState extends State<RoutePage> {
     return 0;
   }
 
-  Future<void> _launchForm() async {
-    final Uri uri = Uri.parse(googleFormUrl);
-    try {
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not launch the Google Form')),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
-  }
+  // Future<void> _launchForm() async {
+  //   final Uri uri = Uri.parse(googleFormUrl);
+  //   try {
+  //     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         const SnackBar(content: Text('Could not launch the Google Form')),
+  //       );
+  //     }
+  //   } catch (e) {
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text('Error: $e')),
+  //     );
+  //   }
+  // }
 
   Future<void> _fetchTargetCollectAmount() async {
     final doc =
@@ -354,18 +355,44 @@ class _RoutePageState extends State<RoutePage> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.question_mark_outlined),
-            tooltip: "Terms & Conditions",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => TermsAndConditionsPage()),
-              );
-            },
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(130),
+              color: const Color.fromARGB(255, 139, 126, 126),
+              boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+              ],
+            ),
+            margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+            child: Material(
+              color: Colors.transparent,
+              elevation: 9,
+              borderRadius: BorderRadius.circular(130),
+              child: IconButton(
+          icon: Center(
+            child: const Text(
+              "📝",
+              style: TextStyle(fontSize: 28, color: Colors.green),
+            ),
+          ),
+          tooltip: "Terms & Conditions",
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => TermsAndConditionsPage()),
+            );
+          },
+              ),
+            ),
           ),
         ],
-      ),
+                ),
+              
+
       body: RefreshIndicator(
         onRefresh: () async {
           await _fetchTotalPaidAcrossAllRoutes();
@@ -462,7 +489,7 @@ class _RoutePageState extends State<RoutePage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const CollectorStockListPage(),
+                          builder: (context) => const OrderPage(),
                         ),
                       );
                     },
@@ -626,15 +653,24 @@ Widget paidShopsSummaryCard() {
       .collection('dailyPaidShops')
       .doc(todayKey);
 
-  // Month range query
-  final firstDayOfMonth = DateTime(now.year, now.month, 1);
-  final monthCollectionRef = FirebaseFirestore.instance
+  // ✅ Week range query (Monday → Sunday)
+  final int currentWeekday = now.weekday; // Monday=1, Sunday=7
+  final DateTime mondayThisWeek =
+      now.subtract(Duration(days: currentWeekday - 1));
+  final DateTime sundayThisWeek = mondayThisWeek.add(const Duration(days: 6));
+
+  final String weekStartKey =
+      "${mondayThisWeek.year}-${mondayThisWeek.month.toString().padLeft(2, '0')}-${mondayThisWeek.day.toString().padLeft(2, '0')}";
+
+  final String weekEndKey =
+      "${sundayThisWeek.year}-${sundayThisWeek.month.toString().padLeft(2, '0')}-${sundayThisWeek.day.toString().padLeft(2, '0')}";
+
+  final weekCollectionRef = FirebaseFirestore.instance
       .collection('admin')
       .doc('summary')
       .collection('dailyPaidShops')
-      .where('date',
-          isGreaterThanOrEqualTo:
-              "${firstDayOfMonth.year}-${firstDayOfMonth.month.toString().padLeft(2, '0')}-01");
+      .where('date', isGreaterThanOrEqualTo: weekStartKey)
+      .where('date', isLessThanOrEqualTo: weekEndKey);
 
   return Row(
     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -678,19 +714,18 @@ Widget paidShopsSummaryCard() {
       ),
       const SizedBox(width: 8),
 
-      // Month Paid Shops Card
+      // ✅ Week Paid Shops Card
       Expanded(
         child: StreamBuilder<QuerySnapshot>(
-          stream: monthCollectionRef.snapshots(),
+          stream: weekCollectionRef.snapshots(),
           builder: (context, snapshot) {
-            int monthTotal = 0;
+            int weekTotal = 0;
             if (snapshot.hasData) {
               for (var doc in snapshot.data!.docs) {
                 final data = doc.data() as Map<String, dynamic>;
-                monthTotal += (data['paidShopsCount'] ?? 0) as int;
+                weekTotal += (data['paidShopsCount'] ?? 0) as int;
               }
             }
-
             return Card(
               color: Colors.blue[50],
               child: Padding(
@@ -700,11 +735,11 @@ Widget paidShopsSummaryCard() {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text(
-                      "Month's Paid",
+                      "Week's Paid",
                       style: TextStyle(fontSize: 13),
                     ),
                     Text(
-                      "$monthTotal",
+                      "$weekTotal",
                       style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
