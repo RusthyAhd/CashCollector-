@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_bluetooth_printer/flutter_bluetooth_printer.dart';
+
 class BalanceScreen extends StatefulWidget {
   final String shopName;
   final String routeName;
@@ -24,6 +25,7 @@ class _BalanceScreenState extends State<BalanceScreen> {
 
   double? balanceAmount;
   bool _isProcessing = false;
+  bool _isOKLoading = false;
 
   List<Map<String, dynamic>> transactions = [];
 
@@ -34,7 +36,6 @@ class _BalanceScreenState extends State<BalanceScreen> {
     print('Shop ID: ${widget.shopId}');
     print('Route: ${widget.routeName}');
   }
-
 
   Future<void> _fetchBalance() async {
     final shopRef = FirebaseFirestore.instance
@@ -170,7 +171,8 @@ class _BalanceScreenState extends State<BalanceScreen> {
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                  content: Text("Invalid amount entered\nAmount must be at least 300")),
+                                  content: Text(
+                                      "Invalid amount entered\nAmount must be at least 300")),
                             );
                           }
                         },
@@ -195,109 +197,153 @@ class _BalanceScreenState extends State<BalanceScreen> {
       },
     );
   }
-/// Receipt dialog
-void _showReceiptDialog({
-  required String shopName,
-  required double oldBalance,
-  required double reducedAmount,
-  required double newBalance,
-}) {
-  showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text("Pegas Flex\nKinniya 02\n0755354023"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Shop: $shopName", style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 15),
-            Text("Old Balance: LKR ${oldBalance.toStringAsFixed(2)}"),
-            const SizedBox(height: 12),
-            Text("Deducted: LKR ${reducedAmount.toStringAsFixed(2)}"),
-            const SizedBox(height: 12),
-            Text("New Balance: LKR ${newBalance.toStringAsFixed(2)}",
-                style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel", style: TextStyle(color: Colors.black)),
-          ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.print, size: 18),
-            label: const Text("Print"),
-            onPressed: () async {
-              // 1️⃣ Select printer device
-              final device = await FlutterBluetoothPrinter.selectDevice(context);
-              if (device == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("No printer selected")),
-                );
-                return;
-              }
 
-              // 2️⃣ Show preview dialog with Exit + Print
-              await showDialog(
-                context: context,
-                barrierDismissible: false, // prevent closing by tapping outside
-                builder: (context) {
-                  return AlertDialog(
-                    title: const Text("Receipt Preview"),
-                    content: Receipt(
-                      builder: (context) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("Pegas Flex\nKinniya 02\n0755354023"),
-                          const Divider(),
-                          Text("Shop: $shopName"),
-                          const SizedBox(height: 10),
-                          Text("Old Balance: LKR ${oldBalance.toStringAsFixed(2)}"),
-                          const SizedBox(height: 8),
-                          Text("Deducted: LKR ${reducedAmount.toStringAsFixed(2)}"),
-                          const SizedBox(height: 8),
-                          Text("New Balance: LKR ${newBalance.toStringAsFixed(2)}"),
-                        ],
-                      ),
-                      onInitialized: (controller) {
-                        _receiptController = controller;
-                      },
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(context).pop(); // Exit preview without printing
-                        },
-                        child: const Text("Exit", style: TextStyle(color: Colors.black)),
-                      ),
-                      ElevatedButton(
-                        onPressed: () async {
-                          if (_receiptController != null) {
-                            await _receiptController!.print(address: device.address);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Receipt sent to printer")),
-                            );
-                          }
-                          Navigator.of(context).pop(); // Close preview
-                        },
-                        child: const Text("Ok", style: TextStyle(color: Colors.black)),
-                      ),
-                    ],
+  /// Receipt dialog
+  void _showReceiptDialog({
+    required String shopName,
+    required double oldBalance,
+    required double reducedAmount,
+    required double newBalance,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text("Pegas Flex\nKinniya 02\n0755354023"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Shop: $shopName",
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 15),
+              Text("Old Balance: LKR ${oldBalance.toStringAsFixed(2)}"),
+              const SizedBox(height: 12),
+              Text("Deducted: LKR ${reducedAmount.toStringAsFixed(2)}"),
+              const SizedBox(height: 12),
+              Text("New Balance: LKR ${newBalance.toStringAsFixed(2)}",
+                  style: const TextStyle(
+                      color: Colors.green, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Center(child: const Text(".")),
+              const SizedBox(height: 2),
+              Center(child: const Text(".")),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child:
+                  const Text("Cancel", style: TextStyle(color: Colors.black)),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.print, size: 18),
+              label: const Text("Print"),
+              onPressed: () async {
+                // 1️⃣ Select printer device
+                final device =
+                    await FlutterBluetoothPrinter.selectDevice(context);
+                if (device == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("No printer selected")),
                   );
-                },
-              );
+                  return;
+                }
 
-              Navigator.pop(context); // Close the first dialog
-            },
-          ),
-        ],
-      );
-    },
-  );
-}
+                // 2️⃣ Show preview dialog with Exit + Print
+                await showDialog(
+                  context: context,
+                  barrierDismissible:
+                      false, // prevent closing by tapping outside
+                  builder: (context) {
+                    return AlertDialog(
+                      title: const Text("Receipt Preview"),
+                      content: Receipt(
+                        builder: (context) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("Pegas Flex\nKinniya 02\n0755354023"),
+                            const Divider(),
+                            Text("Shop: $shopName"),
+                            const SizedBox(height: 10),
+                            Text(
+                                "Old Balance: LKR ${oldBalance.toStringAsFixed(2)}"),
+                            const SizedBox(height: 8),
+                            Text(
+                                "Deducted: LKR ${reducedAmount.toStringAsFixed(2)}"),
+                            const SizedBox(height: 8),
+                            Text(
+                                "New Balance: LKR ${newBalance.toStringAsFixed(2)}"),
+                            const SizedBox(height: 8),
+                            Center(child: const Text(".")),
+                            const SizedBox(height: 2),
+                            Center(child: const Text(".")),
+                          ],
+                        ),
+                        onInitialized: (controller) {
+                          _receiptController = controller;
+                        },
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context)
+                                .pop(); // Exit preview without printing
+                          },
+                          child: const Text("Exit",
+                              style: TextStyle(color: Colors.black)),
+                        ),
+                        ElevatedButton(
+                          onPressed: () async {
+                            setState(() {
+                              _isOKLoading = true; // show loader
+                            });
+
+                            if (_receiptController != null) {
+                              await _receiptController!
+                                  .print(address: device.address);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text("Receipt sent to printer")),
+                              );
+                            }
+
+                            // Wait 2 seconds after printing
+                            await Future.delayed(const Duration(seconds: 6));
+
+                            setState(() {
+                              _isOKLoading = false; // hide loader
+                            });
+
+                            Navigator.of(context).pop(); // Close preview
+                          },
+                          child: _isOKLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.black,
+                                  ),
+                                )
+                              : const Text("Ok",
+                                  style: TextStyle(color: Colors.black)),
+                        )
+                      ],
+                    );
+                  },
+                );
+
+                Navigator.pop(context); // Close the first dialog
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   void _showFeedbackDialog() {
     String? selectedReason;

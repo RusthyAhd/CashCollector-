@@ -1,11 +1,9 @@
 import 'package:cash_collector/screens/addReceipts.dart';
 import 'package:cash_collector/screens/add_order_screen.dart';
 import 'package:cash_collector/screens/shoplistscreen.dart';
-import 'package:cash_collector/screens/stocklist.dart';
 import 'package:cash_collector/screens/termsandconditions.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 
