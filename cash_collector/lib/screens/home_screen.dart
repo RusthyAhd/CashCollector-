@@ -15,8 +15,8 @@ class RoutePage extends StatefulWidget {
 }
 
 class _RoutePageState extends State<RoutePage> {
- // final String googleFormUrl =
-   //   "https://docs.google.com/forms/d/e/1FAIpQLSfZOSjqEHGOQuRZeCr6XF7JWrqLbFronAMdiHJ28d853Nau8g/viewform?usp=header";
+  // final String googleFormUrl =
+  //   "https://docs.google.com/forms/d/e/1FAIpQLSfZOSjqEHGOQuRZeCr6XF7JWrqLbFronAMdiHJ28d853Nau8g/viewform?usp=header";
   bool isBalanceLoading = true;
   bool isTodayCollectionLoading = true;
   bool isWeekCollectionLoading = true;
@@ -25,6 +25,13 @@ class _RoutePageState extends State<RoutePage> {
   double totalPaidTodayAmount = 0;
   double totalPaidThisWeekAmount = 0;
   double targetCollectAmount = 0.0;
+  List<bool> weeklyTargetsAchieved = [
+    false,
+    false,
+    false,
+    false
+  ]; // 4 weeks of month
+  List<double> weeklyAmounts = [0, 0, 0, 0]; // Weekly amounts for current month
 
   @override
   void initState() {
@@ -35,6 +42,7 @@ class _RoutePageState extends State<RoutePage> {
     _fetchWeekPaid();
     _fetchTotalPaidToday();
     _fetchTargetCollectAmount();
+    _fetchMonthlyWeeklyProgress();
   }
 
   // Future<void> copyAndRenameShop({
@@ -171,6 +179,73 @@ class _RoutePageState extends State<RoutePage> {
         targetCollectAmount = (doc['targetWeek'] ?? 0).toDouble();
       });
     }
+  }
+
+  Future<void> _fetchMonthlyWeeklyProgress() async {
+    final now = DateTime.now();
+    final firstDayOfMonth = DateTime(now.year, now.month, 1);
+    final lastDayOfMonth = DateTime(now.year, now.month + 1, 0);
+
+    List<double> weeklyAmountsTemp = [0, 0, 0, 0];
+    List<bool> weeklyTargetsTemp = [false, false, false, false];
+
+    // Calculate 4 weeks of current month
+    for (int week = 0; week < 4; week++) {
+      final weekStart = firstDayOfMonth.add(Duration(days: week * 7));
+      final weekEnd = weekStart.add(Duration(days: 6));
+
+      // Ensure we don't go beyond the current month
+      final actualWeekEnd =
+          weekEnd.isAfter(lastDayOfMonth) ? lastDayOfMonth : weekEnd;
+
+      final startTimestamp = Timestamp.fromDate(DateTime(
+        weekStart.year,
+        weekStart.month,
+        weekStart.day,
+        0,
+        0,
+        0,
+      ));
+
+      final endTimestamp = Timestamp.fromDate(DateTime(
+        actualWeekEnd.year,
+        actualWeekEnd.month,
+        actualWeekEnd.day,
+        23,
+        59,
+        59,
+      ));
+
+      // Fetch deductions for this week
+      final deductionsSnapshot = await FirebaseFirestore.instance
+          .collection('deductions')
+          .where('sentAt', isGreaterThanOrEqualTo: startTimestamp)
+          .where('sentAt', isLessThanOrEqualTo: endTimestamp)
+          .get();
+
+      double weekTotal = 0;
+      for (var doc in deductionsSnapshot.docs) {
+        final data = doc.data();
+        final type = data['type'];
+        final amount = (data['amount'] ?? 0).toDouble();
+
+        if (type == null || type == 'paid' || type != 'Credit') {
+          weekTotal += amount;
+        }
+      }
+
+      weeklyAmountsTemp[week] = weekTotal;
+
+      // Check if this week's target is achieved
+      if (weekTotal >= targetCollectAmount) {
+        weeklyTargetsTemp[week] = true;
+      }
+    }
+
+    setState(() {
+      weeklyAmounts = weeklyAmountsTemp;
+      weeklyTargetsAchieved = weeklyTargetsTemp;
+    });
   }
 
   Future<void> _fetchTotalPaidAcrossAllRoutes() async {
@@ -343,6 +418,7 @@ class _RoutePageState extends State<RoutePage> {
                 });
                 await _fetchTotalPaidAcrossAllRoutes();
                 await _fetchTotalPaidToday();
+                await _fetchMonthlyWeeklyProgress();
                 setState(() {
                   isUploading = false;
                   isTodayCollectionLoading = false;
@@ -358,11 +434,11 @@ class _RoutePageState extends State<RoutePage> {
               borderRadius: BorderRadius.circular(130),
               color: const Color.fromARGB(255, 139, 126, 126),
               boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: Offset(0, 4),
+                ),
               ],
             ),
             margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
@@ -371,30 +447,29 @@ class _RoutePageState extends State<RoutePage> {
               elevation: 9,
               borderRadius: BorderRadius.circular(160),
               child: IconButton(
-          icon: Center(
-            child: const Text(
-              "🚨",
-              style: TextStyle(fontSize: 28, color: Colors.green),
-            ),
-          ),
-          tooltip: "Terms & Conditions",
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => TermsAndConditionsPage()),
-            );
-          },
+                icon: Center(
+                  child: const Text(
+                    "🚨",
+                    style: TextStyle(fontSize: 28, color: Colors.green),
+                  ),
+                ),
+                tooltip: "Terms & Conditions",
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => TermsAndConditionsPage()),
+                  );
+                },
               ),
             ),
           ),
         ],
-                ),
-              
-
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           await _fetchTotalPaidAcrossAllRoutes();
           await _fetchTotalPaidToday();
+          await _fetchMonthlyWeeklyProgress();
         },
         child: Column(
           children: [
@@ -525,7 +600,7 @@ class _RoutePageState extends State<RoutePage> {
                   Center(
                     child: Card(
                         child: Padding(
-                      padding: const EdgeInsets.all(16.0),
+                      padding: const EdgeInsets.all(8.0),
                       child: isBalanceLoading
                           ? const SpinKitThreeBounce(
                               color: Colors.green,
@@ -568,7 +643,8 @@ class _RoutePageState extends State<RoutePage> {
             ),
             Padding(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10),
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8
+                ),
               child: paidShopsSummaryCard(),
             ),
             Padding(
@@ -598,30 +674,92 @@ class _RoutePageState extends State<RoutePage> {
                       ),
                     ],
                   ),
-                  child: Row(
+                  //target
+                  child: Column(
                     children: [
-                      const Icon(Icons.star_rounded,
-                          size: 32, color: Colors.deepOrangeAccent),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              "Target of This Week",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                              ),
+                      Row(
+                        children: [
+                          const Icon(Icons.star_rounded,
+                              size: 32, color: Colors.deepOrangeAccent),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  "Target of This Week",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  "Rs. ${targetCollectAmount.toStringAsFixed(2)}",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.deepOrange[800],
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "Rs. ${targetCollectAmount.toStringAsFixed(2)}",
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.deepOrange[800],
-                              ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      // 4-star monthly progress indicator
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          children: [
+                            // const Text(
+                            //   "Monthly Progress",
+                            //   style: TextStyle(
+                            //     fontSize: 12,
+                            //     fontWeight: FontWeight.w500,
+                            //     color: Colors.grey,
+                            //   ),
+                            // ),
+                            // const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(4, (index) {
+                                final isAchieved = weeklyTargetsAchieved[index];
+                                final weekNumber = index + 1;
+
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 4),
+                                  child: Column(
+                                    children: [
+                                      Icon(
+                                        Icons.star,
+                                        size: 24,
+                                        color: isAchieved
+                                            ? Colors.green
+                                            : Colors.grey[400],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        "W$weekNumber",
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: isAchieved
+                                              ? Colors.green
+                                              : Colors.grey[600],
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
                             ),
                           ],
                         ),
