@@ -115,7 +115,7 @@ class _BalanceScreenState extends State<BalanceScreen> {
                           final double? reduction = double.tryParse(input);
 
                           if (reduction != null &&
-                              reduction > 300 &&
+                              reduction > 299 &&
                               reduction <= (balanceAmount ?? 0)) {
                             setStateDialog(() {
                               _isProcessing = true;
@@ -311,7 +311,7 @@ class _BalanceScreenState extends State<BalanceScreen> {
                             }
 
                             // Wait 2 seconds after printing
-                            await Future.delayed(const Duration(seconds: 6));
+                            await Future.delayed(const Duration(seconds: 3));
 
                             setState(() {
                               _isOKLoading = false; // hide loader
