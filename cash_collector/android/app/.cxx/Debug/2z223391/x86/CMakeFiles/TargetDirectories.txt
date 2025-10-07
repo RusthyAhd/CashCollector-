@@ -1,0 +1,2 @@
+D:/pegas/CashCollector-/cash_collector/android/app/.cxx/Debug/2z223391/x86/CMakeFiles/edit_cache.dir
+D:/pegas/CashCollector-/cash_collector/android/app/.cxx/Debug/2z223391/x86/CMakeFiles/rebuild_cache.dir

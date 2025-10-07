@@ -1,0 +1,2 @@
+D:/pegas/CashCollector-/cash_collector/android/app/.cxx/RelWithDebInfo/66i5l5vy/arm64-v8a/CMakeFiles/edit_cache.dir
+D:/pegas/CashCollector-/cash_collector/android/app/.cxx/RelWithDebInfo/66i5l5vy/arm64-v8a/CMakeFiles/rebuild_cache.dir
